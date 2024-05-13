@@ -28,6 +28,9 @@
    that are ready to run but not actually running. */
 static struct list ready_list;
 
+// 스레드 sleep 상태를 보관하기 위한 list
+static struct list sleep_list;
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -105,14 +108,17 @@ static uint64_t gdt[3] = {0, 0x00af9a000000ffff, 0x00cf92000000ffff};
    [스레드 시스템을 초기화하고, 스레드 생성전에 필요한 단계 설명]
 
    현재 실행 중인 코드를 스레드로 변환함으로써 스레딩 시스템을 초기화한다.
-   이것은 일반적으로 작동할 수 없으며, loader.S가 스택의 바닥을 페이지 경계에 맞추어 놓았기 때문에
+   이것은 일반적으로 작동할 수 없으며,
+   loader.S가 스택의 바닥을 페이지 경계에 맞추어 놓았기 때문에
    가능한 일이다.
 
    또한 실행 큐와 tid잠금을 초기화한다.
 
-   이 함수를 호출한 후에는 thread_create()로 어떤 스레드도 생성하기 전에 페이지 할당자를 초기화해야 한다.
+   이 함수를 호출한 후에는 thread_create()로
+	어떤 스레드도 생성하기 전에 페이지 할당자를 초기화해야 한다.
 
-   이 함수가 완료될 때까지 thread_current()를 호출하는 것은 안전하지 않다. */
+   이 함수가 완료될 때까지 thread_current()를
+   호출하는 것은 안전하지 않다. */
 void thread_init(void)
 {
 	ASSERT(intr_get_level() == INTR_OFF);
@@ -121,7 +127,8 @@ void thread_init(void)
 	 * This gdt does not include the user context.
 	 * The kernel will rebuild the gdt with user context, in gdt_init (). */
 	/****************************************************************************
-	 [초기 커널 스레드를 설정할때 사용되는 임시 글로벌 디스크립터 테이블(gdt)을 다시 로드하고,
+	 [초기 커널 스레드를 설정할때 사용되는 임시 글로벌 디스크립터 테이블(gdt)
+	 을 다시 로드하고,
 	 나중에 사용자 컨텍스트를 포함한 gdt로 업데이트하는 과정을 설명]
 
 	 * 커널을 위한 임시 gdt를 다시 로드한다.
@@ -136,6 +143,7 @@ void thread_init(void)
 	// 전역 스레드 컨텍스트를 초기화한다
 	lock_init(&tid_lock);
 	list_init(&ready_list);
+	list_init(&sleep_list); // slepp_list 초기화 코드 추가
 	list_init(&destruction_req);
 
 	/* Set up a thread structure for the running thread. */
@@ -314,7 +322,7 @@ void thread_unblock(struct thread *t)
 }
 
 /* Returns the name of the running thread. */
-// 실행 중인 스레드의 이름을 반환한다.
+// 실행 중인 스레드의 이름을 반환한다.f
 const char *
 thread_name(void)
 {
@@ -387,10 +395,13 @@ void thread_exit(void)
 /* CPU를 양보합니다. 현재 스레드는 대기 상태로 전환되지 않으며,
    스케줄러의 재량에 따라 즉시 다시 스케줄될 수 있습니다.
 
-   이 주석은 현재 실행 중인 스레드가 CPU 사용을 중단하고 다른 스레드에게 CPU를 넘겨주지만,
-   대기 상태로 전환되지는 않으며, 스케줄러가 결정하기에 따라 바로 다시 CPU를 할당받아 실행될 수 있음을 의미합니다.
+   이 주석은 현재 실행 중인 스레드가 CPU 사용을 중단하고
+	다른 스레드에게 CPU를 넘겨주지만,
+   대기 상태로 전환되지는 않으며, 스케줄러가 결정하기에 따라 바로
+	다시 CPU를 할당받아 실행될 수 있음을 의미합니다.
    즉, 스레드가 CPU를 사용하지 않는 시간을 다른 스레드에게 제공하지만,
-   그 스레드가 완전히 중지되는 것은 아니며 언제든지 다시 실행될 준비가 되어 있다는 것을 나타냅니다. */
+   그 스레드가 완전히 중지되는 것은 아니며 언제든지 다시 실행될 준비가
+	되어 있다는 것을 나타냅니다. */
 void thread_yield(void)
 {
 	struct thread *curr = thread_current();
@@ -403,6 +414,71 @@ void thread_yield(void)
 		list_push_back(&ready_list, &curr->elem);
 	do_schedule(THREAD_READY);
 	intr_set_level(old_level);
+}
+
+// project 1 thread에서 내가 직접 새로 구현하는 함수
+// 스레드 재우는 함수
+void thread_sleep(int64_t wakeup_ticks)
+{
+	/* 여기에 스레드 block 처리해서 sleep_list에 넣는 작업 필요*/
+	/* if the current thread is not idle thread,
+	   change the state of the caller thread to BLOCKED,
+	   store the local tick to wake up,
+	   update the global tick if necessary,
+	   and call schedule()
+	   만약 idle 스레드가 아니라면, 스레드 상태를 blocked로 변경하고,
+	   로컬tick에 깨어날 시간을 저장해놔라 (변경하고 sleep_list에 삽입). 필요하다면
+	   글로벌 tick을 업데이트하고,
+	   스케줄함수를 호출해라 (컨텍스트 스위칭)*/
+	/* When you manipulate thread list, disable interrupt!
+	스레드를 전환하고 있으면 인터럽트를 비활성화 해놔라!*/
+
+	struct thread *curr = thread_current();
+	enum intr_level old_level;
+
+	ASSERT(!intr_context());
+
+	old_level = intr_disable(); // 인터럽트 비활성화
+
+	// 현재 스레드가 idle 스레드가 아니면 준비리스트-> 수면리스트로 삽입
+	if (curr != idle_thread)
+	{
+		curr->local_tick = wakeup_ticks;		  // local tick에 깨어날 시간 저장해주기
+		list_push_back(&sleep_list, &curr->elem); // 수면큐에 삽입
+		thread_block();							  // 현재 스레드 blocked 상태로 변경
+	}
+	intr_set_level(old_level); // 인터럽트 활성화
+}
+
+/* 두 스레드의 wakeup_tick 값을 비교하는 함수 */
+static bool compare_ticks(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
+{
+	struct thread *thread_a = list_entry(a, struct thread, elem);
+	struct thread *thread_b = list_entry(b, struct thread, elem);
+	return thread_a->local_tick < thread_b->local_tick;
+}
+
+// 잠자는 스레드 깨우는 함수
+void thread_wakeup(int64_t wakeup_ticks)
+{
+
+	// local_tick이 최소값을 가지는 스레드 반환
+	struct thread *thread_a = list_entry(curr, struct thread, elem);
+
+	// printf("test new sleep thread: %lld\n", thread_a->local_tick);
+	while (true)
+	{
+		struct list_elem *curr = list_min(&sleep_list, compare_ticks, NULL);
+		if (curr == list_end(sleep_list)) // tail이 아닐때까지 반복
+			return;
+
+		if (thread_a->local_tick <= wakeup_ticks)
+		{
+			enum intr_level old_level = intr_disable(); // 인터럽트 비활성화
+			list_remove(curr);							// 수면큐에서 깨울 스레드 지우기
+			thread_unblock(thread_a);					// 스레드 차단 해제
+		}
+	}
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
@@ -784,7 +860,7 @@ schedule(void)
 
 	ASSERT(intr_get_level() == INTR_OFF);
 	ASSERT(curr->status != THREAD_RUNNING);
-	`````` ASSERT(is_thread(next));
+	ASSERT(is_thread(next));
 	/* Mark us as running. */
 	next->status = THREAD_RUNNING;
 

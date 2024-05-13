@@ -64,6 +64,7 @@ Differences in `diff -u' format:
 - (priority-condvar) Thread priority 23 woke up.
   (priority-condvar) Signaling...
 - (priority-condvar) Thread priority 22 woke up.
++ ticks:28test new sleep thread: 549825153680
   (priority-condvar) Signaling...
 - (priority-condvar) Thread priority 21 woke up.
   (priority-condvar) end

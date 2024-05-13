@@ -4,15 +4,290 @@ Kernel command line: -q run alarm-single
 Pintos booting with: 
 	base_mem: 0x0 ~ 0x9fc00 (Usable: 639 kB)
 	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
-Calibrating timer...  209,510,400 loops/s.
+Calibrating timer...  ticks:1test new sleep thread: 549825153680
+ticks:2test new sleep thread: 549825153680
+ticks:3test new sleep thread: 549825153680
+ticks:4test new sleep thread: 549825153680
+ticks:5test new sleep thread: 549825153680
+ticks:6test new sleep thread: 549825153680
+ticks:7test new sleep thread: 549825153680
+ticks:8test new sleep thread: 549825153680
+ticks:9test new sleep thread: 549825153680
+ticks:10test new sleep thread: 549825153680
+ticks:11test new sleep thread: 549825153680
+ticks:12test new sleep thread: 549825153680
+ticks:13test new sleep thread: 549825153680
+ticks:14test new sleep thread: 549825153680
+ticks:15test new sleep thread: 549825153680
+ticks:16test new sleep thread: 549825153680
+ticks:17test new sleep thread: 549825153680
+ticks:18test new sleep thread: 549825153680
+ticks:19test new sleep thread: 549825153680
+ticks:20test new sleep thread: 549825153680
+ticks:21test new sleep thread: 549825153680
+ticks:22test new sleep thread: 549825153680
+ticks:23test new sleep thread: 549825153680
+ticks:24test new sleep thread: 549825153680
+261,734,400 loops/s.
 Boot complete.
 Executing 'alarm-single':
+ticks:25test new sleep thread: 549825153680
 (alarm-single) begin
 (alarm-single) Creating 5 threads to sleep 1 times each.
 (alarm-single) Thread 0 sleeps 10 ticks each time,
 (alarm-single) thread 1 sleeps 20 ticks each time, and so on.
 (alarm-single) If successful, product of iteration count and
 (alarm-single) sleep duration will appear in nondescending order.
+ticks:26test new sleep thread: 135
+ticks:27test new sleep thread: 135
+ticks:28test new sleep thread: 135
+ticks:29test new sleep thread: 135
+ticks:30test new sleep thread: 135
+ticks:31test new sleep thread: 135
+ticks:32test new sleep thread: 135
+ticks:33test new sleep thread: 135
+ticks:34test new sleep thread: 135
+ticks:35test new sleep thread: 135
+ticks:36test new sleep thread: 135
+ticks:37test new sleep thread: 135
+ticks:38test new sleep thread: 135
+ticks:39test new sleep thread: 135
+ticks:40test new sleep thread: 135
+ticks:41test new sleep thread: 135
+ticks:42test new sleep thread: 135
+ticks:43test new sleep thread: 135
+ticks:44test new sleep thread: 135
+ticks:45test new sleep thread: 135
+ticks:46test new sleep thread: 135
+ticks:47test new sleep thread: 135
+ticks:48test new sleep thread: 135
+ticks:49test new sleep thread: 135
+ticks:50test new sleep thread: 135
+ticks:51test new sleep thread: 135
+ticks:52test new sleep thread: 135
+ticks:53test new sleep thread: 135
+ticks:54test new sleep thread: 135
+ticks:55test new sleep thread: 135
+ticks:56test new sleep thread: 135
+ticks:57test new sleep thread: 135
+ticks:58test new sleep thread: 135
+ticks:59test new sleep thread: 135
+ticks:60test new sleep thread: 135
+ticks:61test new sleep thread: 135
+ticks:62test new sleep thread: 135
+ticks:63test new sleep thread: 135
+ticks:64test new sleep thread: 135
+ticks:65test new sleep thread: 135
+ticks:66test new sleep thread: 135
+ticks:67test new sleep thread: 135
+ticks:68test new sleep thread: 135
+ticks:69test new sleep thread: 135
+ticks:70test new sleep thread: 135
+ticks:71test new sleep thread: 135
+ticks:72test new sleep thread: 135
+ticks:73test new sleep thread: 135
+ticks:74test new sleep thread: 135
+ticks:75test new sleep thread: 135
+ticks:76test new sleep thread: 135
+ticks:77test new sleep thread: 135
+ticks:78test new sleep thread: 135
+ticks:79test new sleep thread: 135
+ticks:80test new sleep thread: 135
+ticks:81test new sleep thread: 135
+ticks:82test new sleep thread: 135
+ticks:83test new sleep thread: 135
+ticks:84test new sleep thread: 135
+ticks:85test new sleep thread: 135
+ticks:86test new sleep thread: 135
+ticks:87test new sleep thread: 135
+ticks:88test new sleep thread: 135
+ticks:89test new sleep thread: 135
+ticks:90test new sleep thread: 135
+ticks:91test new sleep thread: 135
+ticks:92test new sleep thread: 135
+ticks:93test new sleep thread: 135
+ticks:94test new sleep thread: 135
+ticks:95test new sleep thread: 135
+ticks:96test new sleep thread: 135
+ticks:97test new sleep thread: 135
+ticks:98test new sleep thread: 135
+ticks:99test new sleep thread: 135
+ticks:100test new sleep thread: 135
+ticks:101test new sleep thread: 135
+ticks:102test new sleep thread: 135
+ticks:103test new sleep thread: 135
+ticks:104test new sleep thread: 135
+ticks:105test new sleep thread: 135
+ticks:106test new sleep thread: 135
+ticks:107test new sleep thread: 135
+ticks:108test new sleep thread: 135
+ticks:109test new sleep thread: 135
+ticks:110test new sleep thread: 135
+ticks:111test new sleep thread: 135
+ticks:112test new sleep thread: 135
+ticks:113test new sleep thread: 135
+ticks:114test new sleep thread: 135
+ticks:115test new sleep thread: 135
+ticks:116test new sleep thread: 135
+ticks:117test new sleep thread: 135
+ticks:118test new sleep thread: 135
+ticks:119test new sleep thread: 135
+ticks:120test new sleep thread: 135
+ticks:121test new sleep thread: 135
+ticks:122test new sleep thread: 135
+ticks:123test new sleep thread: 135
+ticks:124test new sleep thread: 135
+ticks:125test new sleep thread: 135
+ticks:126test new sleep thread: 135
+ticks:127test new sleep thread: 135
+ticks:128test new sleep thread: 135
+ticks:129test new sleep thread: 135
+ticks:130test new sleep thread: 135
+ticks:131test new sleep thread: 135
+ticks:132test new sleep thread: 135
+ticks:133test new sleep thread: 135
+ticks:134test new sleep thread: 135
+ticks:135test new sleep thread: 135
+ticks:136test new sleep thread: 145
+ticks:137test new sleep thread: 145
+ticks:138test new sleep thread: 145
+ticks:139test new sleep thread: 145
+ticks:140test new sleep thread: 145
+ticks:141test new sleep thread: 145
+ticks:142test new sleep thread: 145
+ticks:143test new sleep thread: 145
+ticks:144test new sleep thread: 145
+ticks:145test new sleep thread: 145
+ticks:146test new sleep thread: 155
+ticks:147test new sleep thread: 155
+ticks:148test new sleep thread: 155
+ticks:149test new sleep thread: 155
+ticks:150test new sleep thread: 155
+ticks:151test new sleep thread: 155
+ticks:152test new sleep thread: 155
+ticks:153test new sleep thread: 155
+ticks:154test new sleep thread: 155
+ticks:155test new sleep thread: 155
+ticks:156test new sleep thread: 165
+ticks:157test new sleep thread: 165
+ticks:158test new sleep thread: 165
+ticks:159test new sleep thread: 165
+ticks:160test new sleep thread: 165
+ticks:161test new sleep thread: 165
+ticks:162test new sleep thread: 165
+ticks:163test new sleep thread: 165
+ticks:164test new sleep thread: 165
+ticks:165test new sleep thread: 165
+ticks:166test new sleep thread: 175
+ticks:167test new sleep thread: 175
+ticks:168test new sleep thread: 175
+ticks:169test new sleep thread: 175
+ticks:170test new sleep thread: 175
+ticks:171test new sleep thread: 175
+ticks:172test new sleep thread: 175
+ticks:173test new sleep thread: 175
+ticks:174test new sleep thread: 175
+ticks:175test new sleep thread: 175
+ticks:176test new sleep thread: 275
+ticks:177test new sleep thread: 275
+ticks:178test new sleep thread: 275
+ticks:179test new sleep thread: 275
+ticks:180test new sleep thread: 275
+ticks:181test new sleep thread: 275
+ticks:182test new sleep thread: 275
+ticks:183test new sleep thread: 275
+ticks:184test new sleep thread: 275
+ticks:185test new sleep thread: 275
+ticks:186test new sleep thread: 275
+ticks:187test new sleep thread: 275
+ticks:188test new sleep thread: 275
+ticks:189test new sleep thread: 275
+ticks:190test new sleep thread: 275
+ticks:191test new sleep thread: 275
+ticks:192test new sleep thread: 275
+ticks:193test new sleep thread: 275
+ticks:194test new sleep thread: 275
+ticks:195test new sleep thread: 275
+ticks:196test new sleep thread: 275
+ticks:197test new sleep thread: 275
+ticks:198test new sleep thread: 275
+ticks:199test new sleep thread: 275
+ticks:200test new sleep thread: 275
+ticks:201test new sleep thread: 275
+ticks:202test new sleep thread: 275
+ticks:203test new sleep thread: 275
+ticks:204test new sleep thread: 275
+ticks:205test new sleep thread: 275
+ticks:206test new sleep thread: 275
+ticks:207test new sleep thread: 275
+ticks:208test new sleep thread: 275
+ticks:209test new sleep thread: 275
+ticks:210test new sleep thread: 275
+ticks:211test new sleep thread: 275
+ticks:212test new sleep thread: 275
+ticks:213test new sleep thread: 275
+ticks:214test new sleep thread: 275
+ticks:215test new sleep thread: 275
+ticks:216test new sleep thread: 275
+ticks:217test new sleep thread: 275
+ticks:218test new sleep thread: 275
+ticks:219test new sleep thread: 275
+ticks:220test new sleep thread: 275
+ticks:221test new sleep thread: 275
+ticks:222test new sleep thread: 275
+ticks:223test new sleep thread: 275
+ticks:224test new sleep thread: 275
+ticks:225test new sleep thread: 275
+ticks:226test new sleep thread: 275
+ticks:227test new sleep thread: 275
+ticks:228test new sleep thread: 275
+ticks:229test new sleep thread: 275
+ticks:230test new sleep thread: 275
+ticks:231test new sleep thread: 275
+ticks:232test new sleep thread: 275
+ticks:233test new sleep thread: 275
+ticks:234test new sleep thread: 275
+ticks:235test new sleep thread: 275
+ticks:236test new sleep thread: 275
+ticks:237test new sleep thread: 275
+ticks:238test new sleep thread: 275
+ticks:239test new sleep thread: 275
+ticks:240test new sleep thread: 275
+ticks:241test new sleep thread: 275
+ticks:242test new sleep thread: 275
+ticks:243test new sleep thread: 275
+ticks:244test new sleep thread: 275
+ticks:245test new sleep thread: 275
+ticks:246test new sleep thread: 275
+ticks:247test new sleep thread: 275
+ticks:248test new sleep thread: 275
+ticks:249test new sleep thread: 275
+ticks:250test new sleep thread: 275
+ticks:251test new sleep thread: 275
+ticks:252test new sleep thread: 275
+ticks:253test new sleep thread: 275
+ticks:254test new sleep thread: 275
+ticks:255test new sleep thread: 275
+ticks:256test new sleep thread: 275
+ticks:257test new sleep thread: 275
+ticks:258test new sleep thread: 275
+ticks:259test new sleep thread: 275
+ticks:260test new sleep thread: 275
+ticks:261test new sleep thread: 275
+ticks:262test new sleep thread: 275
+ticks:263test new sleep thread: 275
+ticks:264test new sleep thread: 275
+ticks:265test new sleep thread: 275
+ticks:266test new sleep thread: 275
+ticks:267test new sleep thread: 275
+ticks:268test new sleep thread: 275
+ticks:269test new sleep thread: 275
+ticks:270test new sleep thread: 275
+ticks:271test new sleep thread: 275
+ticks:272test new sleep thread: 275
+ticks:273test new sleep thread: 275
+ticks:274test new sleep thread: 275
+ticks:275test new sleep thread: 275
 (alarm-single) thread 0: duration=10, iteration=1, product=10
 (alarm-single) thread 1: duration=20, iteration=1, product=20
 (alarm-single) thread 2: duration=30, iteration=1, product=30
@@ -20,8 +295,9 @@ Executing 'alarm-single':
 (alarm-single) thread 4: duration=50, iteration=1, product=50
 (alarm-single) end
 Execution of 'alarm-single' complete.
-Timer: 271 ticks
-Thread: 0 idle ticks, 271 kernel ticks, 0 user ticks
-Console: 1026 characters output
+Timer: 275 ticks
+Thread: 250 idle ticks, 25 kernel ticks, 0 user ticks
+Console: 11044 characters output
 Keyboard: 0 keys pressed
+ticks:276test new sleep thread: 549825153680
 Powering off...

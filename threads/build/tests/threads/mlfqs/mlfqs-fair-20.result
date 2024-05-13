@@ -1,1 +1,2 @@
-PASS
+FAIL
+Run started 'mlfqs-fair-20' but it never finished

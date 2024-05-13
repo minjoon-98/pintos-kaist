@@ -92,7 +92,7 @@ struct thread
 	enum thread_status status; /* Thread state. */
 	char name[16];			   /* Name (for debugging purposes). */
 	int priority;			   /* Priority. */
-	int64_t wakeup_time;	   // 일어날 시간 변수 저장
+	int64_t local_tick;		   // 일어날 시간 변수 저장
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem; /* List element. */
 

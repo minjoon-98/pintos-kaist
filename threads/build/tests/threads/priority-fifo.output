@@ -4,7 +4,36 @@ Kernel command line: -q run priority-fifo
 Pintos booting with: 
 	base_mem: 0x0 ~ 0x9fc00 (Usable: 639 kB)
 	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
-Calibrating timer...  209,510,400 loops/s.
+Calibrating timer...  ticks:1test new sleep thread: 549825153680
+ticks:2test new sleep thread: 549825153680
+ticks:3test new sleep thread: 549825153680
+ticks:4test new sleep thread: 549825153680
+ticks:5test new sleep thread: 549825153680
+ticks:6test new sleep thread: 549825153680
+ticks:7test new sleep thread: 549825153680
+ticks:8test new sleep thread: 549825153680
+ticks:9test new sleep thread: 549825153680
+ticks:10test new sleep thread: 549825153680
+ticks:11test new sleep thread: 549825153680
+ticks:12test new sleep thread: 549825153680
+ticks:13test new sleep thread: 549825153680
+ticks:14test new sleep thread: 549825153680
+ticks:15test new sleep thread: 549825153680
+ticks:16test new sleep thread: 549825153680
+ticks:17test new sleep thread: 549825153680
+ticks:18test new sleep thread: 549825153680
+ticks:19test new sleep thread: 549825153680
+ticks:20test new sleep thread: 549825153680
+ticks:21test new sleep thread: 549825153680
+ticks:22test new sleep thread: 549825153680
+ticks:23test new sleep thread: 549825153680
+ticks:24test new sleep thread: 549825153680
+ticks:25test new sleep thread: 549825153680
+ticks:26test new sleep thread: 549825153680
+ticks:27test new sleep thread: 549825153680
+ticks:28test new sleep thread: 549825153680
+227,328,000 loops/s.
+ticks:29test new sleep thread: 549825153680
 Boot complete.
 Executing 'priority-fifo':
 (priority-fifo) begin
@@ -12,8 +41,9 @@ Executing 'priority-fifo':
 (priority-fifo) If the order varies then there is a bug.
 (priority-fifo) end
 Execution of 'priority-fifo' complete.
-Timer: 21 ticks
-Thread: 0 idle ticks, 21 kernel ticks, 0 user ticks
-Console: 557 characters output
+Timer: 29 ticks
+Thread: 0 idle ticks, 29 kernel ticks, 0 user ticks
+Console: 1824 characters output
 Keyboard: 0 keys pressed
 Powering off...
+ticks:30test new sleep thread: 549825153680

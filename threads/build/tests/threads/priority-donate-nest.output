@@ -4,20 +4,43 @@ Kernel command line: -q run priority-donate-nest
 Pintos booting with: 
 	base_mem: 0x0 ~ 0x9fc00 (Usable: 639 kB)
 	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
-Calibrating timer...  242,073,600 loops/s.
+Calibrating timer...  ticks:1test new sleep thread: 549825153680
+ticks:2test new sleep thread: 549825153680
+ticks:3test new sleep thread: 549825153680
+ticks:4test new sleep thread: 549825153680
+ticks:5test new sleep thread: 549825153680
+ticks:6test new sleep thread: 549825153680
+ticks:7test new sleep thread: 549825153680
+ticks:8test new sleep thread: 549825153680
+ticks:9test new sleep thread: 549825153680
+ticks:10test new sleep thread: 549825153680
+ticks:11test new sleep thread: 549825153680
+ticks:12test new sleep thread: 549825153680
+ticks:13test new sleep thread: 549825153680
+ticks:14test new sleep thread: 549825153680
+ticks:15test new sleep thread: 549825153680
+ticks:16test new sleep thread: 549825153680
+ticks:17test new sleep thread: 549825153680
+ticks:18test new sleep thread: 549825153680
+ticks:19test new sleep thread: 549825153680
+ticks:20test new sleep thread: 549825153680
+ticks:21test new sleep thread: 549825153680
+209,510,400 loops/s.
 Boot complete.
 Executing 'priority-donate-nest':
 (priority-donate-nest) begin
 (priority-donate-nest) Low thread should have priority 32.  Actual priority: 31.
-(priority-donate-nest) Low thread should have priority 33.  Actual priority: 31.
+(priority-donate-nest) Low thread should have priority 33.  Actual ticks:22test new sleep thread: 549825153680
+priority: 31.
 (priority-donate-nest) Medium thread should have priority 33.  Actual priority: 32.
 (priority-donate-nest) Medium thread got the lock.
 (priority-donate-nest) Medium thread should just have finished.
 (priority-donate-nest) Low thread should have priority 31.  Actual priority: 31.
 (priority-donate-nest) end
 Execution of 'priority-donate-nest' complete.
-Timer: 27 ticks
-Thread: 0 idle ticks, 27 kernel ticks, 0 user ticks
-Console: 899 characters output
-Keyboard: 0 keys pressed
+Timer: 22 ticks
+Thread: 0 idle ticks, 22 kernel ticks, 0 user ticks
+Console: 1858 characters output
+Kticks:23test new sleep thread: 549825153680
+eyboard: 0 keys pressed
 Powering off...

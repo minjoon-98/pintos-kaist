@@ -102,13 +102,19 @@ void timer_sleep(int64_t ticks)
 
 	ASSERT(intr_get_level() == INTR_ON);
 
-	while (timer_elapsed(start) < ticks)
-	{
-		printf("ticks:%d\n", ticks);
-		thread_yield();
-	}
+	// busy wait 방식 (기존 구현 코드)
+	// while (timer_elapsed(start) < ticks)
+	// {
+	// 	printf("ticks:%d\n", ticks);
+	// 	thread_yield();
+	// }
+
 	// thread 재우는 로직 필요 (block)
 	// thread_sleep() -> ticks만큼 재운다.
+	if (timer_elapsed(start) < ticks)
+	{
+		thread_sleep(start + ticks); // thread_sleep() 함수 구현 필요
+	}
 }
 
 /* Suspends execution for approximately MS milliseconds. */
@@ -148,7 +154,10 @@ timer_interrupt(struct intr_frame *args UNUSED)
 	   find any threads to wake up,
 	   move them to the ready list if necessary.
 	   update the global tick.
-	   */
+	*/
+
+	// 깨어날 스레드가 있다면 sleep_list에서 ready_list로 삽입
+	thread_wakeup(ticks); // 일어나야할 시간을 인수로 넘겨줌
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
