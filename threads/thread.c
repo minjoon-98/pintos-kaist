@@ -32,7 +32,7 @@ static struct list ready_list;
 static struct list sleep_list; /* project 1 */
 
 // sleep_list에서 대기중인 스레드들의 wakeup_tick값 중 최소값을 저장
-static int64_t next_tick_to_wakeup;
+static int64_t next_tick_to_wakeup; /* project 1 */
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -257,12 +257,15 @@ void thread_unblock(struct thread *t)
    인터럽트가 꺼진 상태에서 이 함수를 호출해야 합니다.
    일반적으로는 synch.h에 있는 동기화 기본 요소 중 하나를 사용하는 것이 좋습니다.
 */
-void thread_sleep(int64_t ticks) /* project 1 */
+void thread_sleep(int64_t ticks)
 {
-	enum intr_level old_level = intr_disable(); // 스레드 목록을 조작할 때 인터럽트를 비활성화
+	enum intr_level old_level = intr_disable();
 	struct thread *curr_thread = thread_current();
 
 	curr_thread->wakeup_tick = ticks; // 이 시간까지 잠들도록 설정
+
+	// 다음에 일어나야 할 시간을 업데이트
+	update_next_tick_to_wakeup(curr_thread->wakeup_tick);
 
 	if (curr_thread != idle_thread)
 	{
@@ -272,26 +275,66 @@ void thread_sleep(int64_t ticks) /* project 1 */
 	intr_set_level(old_level); // 인터럽트를 활성화
 }
 
+// void thread_sleep(int64_t ticks) /* project 1 */
+// {
+// 	enum intr_level old_level = intr_disable(); // 스레드 목록을 조작할 때 인터럽트를 비활성화
+// 	struct thread *curr_thread = thread_current();
+
+// 	curr_thread->wakeup_tick = ticks; // 이 시간까지 잠들도록 설정
+
+// 	if (curr_thread != idle_thread)
+// 	{
+// 		update_next_tick_to_awake(curr_thread->wakeup_tick); // next_tick_to_wakeup 업데이트
+// 		list_push_back(&sleep_list, &curr_thread->elem);	 // sleep_list에 추가
+// 		thread_block();										 // 스레드를 수면 상태로 만듭니다.
+// 	}
+// 	intr_set_level(old_level); // 인터럽트를 활성화
+// }
+
 /*
    지정된 틱이 지나면 재우고 있는 스레드를 깨웁니다.
    인터럽트가 꺼진 상태에서 이 함수를 호출해야 합니다.
 */
-void thread_wakeup(int64_t ticks) /* project 1 */
+void thread_wakeup(int64_t ticks)
 {
 	enum intr_level old_level = intr_disable();
 	struct list_elem *e = list_begin(&sleep_list);
 	while (e != list_end(&sleep_list))
 	{
 		struct thread *t = list_entry(e, struct thread, elem);
-		e = list_next(e); // 먼저 다음 원소를 저장하고,
+		e = list_next(e); // 다음 원소를 미리 저장
 		if (t->wakeup_tick <= ticks)
 		{						   // 깨워야 할 시간인지 확인
 			list_remove(&t->elem); // sleep_list에서 제거
 			thread_unblock(t);	   // 스레드를 깨웁니다.
 		}
 	}
+
+	// sleep_list가 비어있으면 다음에 일어나야 할 시간을 최대로 설정합니다.
+	if (list_empty(&sleep_list))
+	{
+		next_tick_to_wakeup = INT64_MAX;
+	}
+
 	intr_set_level(old_level);
 }
+
+// void thread_wakeup(int64_t ticks) /* project 1 */
+// {
+// 	enum intr_level old_level = intr_disable();
+// 	struct list_elem *e = list_begin(&sleep_list);
+// 	while (e != list_end(&sleep_list))
+// 	{
+// 		struct thread *t = list_entry(e, struct thread, elem);
+// 		e = list_next(e); // 먼저 다음 원소를 저장하고,
+// 		if (t->wakeup_tick <= ticks)
+// 		{						   // 깨워야 할 시간인지 확인
+// 			list_remove(&t->elem); // sleep_list에서 제거
+// 			thread_unblock(t);	   // 스레드를 깨웁니다.
+// 		}
+// 	}
+// 	intr_set_level(old_level);
+// }
 
 // void thread_wakeup(int64_t ticks) /* project 1 */
 // {
@@ -312,6 +355,27 @@ void thread_wakeup(int64_t ticks) /* project 1 */
 // 	}
 
 // 	intr_set_level(old_level);
+// }
+
+/* 가장 먼저 일어나야할 스레드가 일어날 시간을 반환 */
+void update_next_tick_to_wakeup(int64_t ticks)
+{
+	/* next_tick_to_wakeup가 깨워야 할 스레드의 깨어날 tick값 중 가장 작은 tick을 갖도록 업데이트 */
+	next_tick_to_wakeup = (next_tick_to_wakeup > ticks) ? ticks : next_tick_to_wakeup;
+}
+
+/* 가장 먼저 일어나야할 스레드가 일어날 시간을 반환함 */
+int64_t get_next_tick_to_wakeup(void)
+{
+	return next_tick_to_wakeup;
+}
+
+// /* 두 스레드의 wakeup_tick 값을 비교하는 함수 */
+// static bool compare_ticks(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
+// {
+// 	struct thread *thread_a = list_entry(a, struct thread, elem);
+// 	struct thread *thread_b = list_entry(b, struct thread, elem);
+// 	return thread_a->wakeup_tick < thread_b->wakeup_tick;
 // }
 
 /* Returns the name of the running thread. */
