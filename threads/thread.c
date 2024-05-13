@@ -462,14 +462,13 @@ static bool compare_ticks(const struct list_elem *a, const struct list_elem *b, 
 void thread_wakeup(int64_t wakeup_ticks)
 {
 
-	// local_tick이 최소값을 가지는 스레드 반환
-	struct thread *thread_a = list_entry(curr, struct thread, elem);
-
-	// printf("test new sleep thread: %lld\n", thread_a->local_tick);
 	while (true)
 	{
+		// local_tick이 최소값을 가지는 스레드 반환
 		struct list_elem *curr = list_min(&sleep_list, compare_ticks, NULL);
-		if (curr == list_end(sleep_list)) // tail이 아닐때까지 반복
+		struct thread *thread_a = list_entry(curr, struct thread, elem);
+		// printf("test new sleep thread: %lld\n", thread_a->local_tick);
+		if (curr == list_end(&sleep_list)) // tail이 아닐때까지 반복
 			return;
 
 		if (thread_a->local_tick <= wakeup_ticks)
