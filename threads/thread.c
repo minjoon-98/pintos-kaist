@@ -469,10 +469,6 @@ void thread_wakeup(int64_t wakeup_ticks)
 		struct thread *thread_a = list_entry(curr, struct thread, elem);
 		// printf("test new sleep thread: %lld\n", thread_a->local_tick);
 
-		// sleep_list가 비어있으면 return
-		if (curr == list_end(&sleep_list))
-			return;
-
 		if (thread_a->local_tick <= wakeup_ticks)
 		{
 			enum intr_level old_level = intr_disable(); // 인터럽트 비활성화
