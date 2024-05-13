@@ -257,6 +257,25 @@ void thread_unblock(struct thread *t)
    인터럽트가 꺼진 상태에서 이 함수를 호출해야 합니다.
    일반적으로는 synch.h에 있는 동기화 기본 요소 중 하나를 사용하는 것이 좋습니다.
 */
+// void thread_sleep(int64_t ticks)
+// {
+// 	enum intr_level old_level = intr_disable();
+// 	struct thread *curr_thread = thread_current();
+
+// 	curr_thread->wakeup_tick = ticks; // 이 시간까지 잠들도록 설정
+
+// 	// 다음에 일어나야 할 시간을 업데이트
+// 	update_next_tick_to_wakeup(curr_thread->wakeup_tick);
+
+// 	if (curr_thread != idle_thread)
+// 	{
+// 		// sleep_list에 요소를 정렬된 순서로 삽입합니다.
+// 		list_insert_ordered(&sleep_list, &curr_thread->elem, compare_ticks, NULL);
+// 		thread_block(); // 스레드를 수면 상태로 만듭니다.
+// 	}
+// 	intr_set_level(old_level); // 인터럽트를 활성화
+// }
+
 void thread_sleep(int64_t ticks)
 {
 	enum intr_level old_level = intr_disable();
@@ -275,22 +294,6 @@ void thread_sleep(int64_t ticks)
 	intr_set_level(old_level); // 인터럽트를 활성화
 }
 
-// void thread_sleep(int64_t ticks) /* project 1 */
-// {
-// 	enum intr_level old_level = intr_disable(); // 스레드 목록을 조작할 때 인터럽트를 비활성화
-// 	struct thread *curr_thread = thread_current();
-
-// 	curr_thread->wakeup_tick = ticks; // 이 시간까지 잠들도록 설정
-
-// 	if (curr_thread != idle_thread)
-// 	{
-// 		update_next_tick_to_awake(curr_thread->wakeup_tick); // next_tick_to_wakeup 업데이트
-// 		list_push_back(&sleep_list, &curr_thread->elem);	 // sleep_list에 추가
-// 		thread_block();										 // 스레드를 수면 상태로 만듭니다.
-// 	}
-// 	intr_set_level(old_level); // 인터럽트를 활성화
-// }
-
 /*
    지정된 틱이 지나면 재우고 있는 스레드를 깨웁니다.
    인터럽트가 꺼진 상태에서 이 함수를 호출해야 합니다.
@@ -298,15 +301,25 @@ void thread_sleep(int64_t ticks)
 void thread_wakeup(int64_t ticks)
 {
 	enum intr_level old_level = intr_disable();
-	struct list_elem *e = list_begin(&sleep_list);
-	while (e != list_end(&sleep_list))
+
+	// sleep_list에서 최소 틱 값을 가진 스레드를 찾습니다.
+	struct list_elem *min_elem = list_min(&sleep_list, compare_ticks, NULL);
+
+	// 최소 틱 값을 가진 스레드가 없거나, 해당 스레드의 틱이 주어진 틱보다 클 때까지 반복합니다.
+	while (min_elem != list_end(&sleep_list))
 	{
-		struct thread *t = list_entry(e, struct thread, elem);
-		e = list_next(e); // 다음 원소를 미리 저장
+		struct thread *t = list_entry(min_elem, struct thread, elem);
 		if (t->wakeup_tick <= ticks)
-		{						   // 깨워야 할 시간인지 확인
-			list_remove(&t->elem); // sleep_list에서 제거
+		{
+			list_remove(min_elem); // sleep_list에서 해당 스레드를 제거합니다.
 			thread_unblock(t);	   // 스레드를 깨웁니다.
+
+			// 제거한 후에는 바로 다음 최소 값을 가진 스레드를 찾습니다.
+			min_elem = list_min(&sleep_list, compare_ticks, NULL);
+		}
+		else
+		{
+			break; // 최소 틱 값을 가진 스레드의 틱이 현재 틱보다 클 때는 종료합니다.
 		}
 	}
 
@@ -318,6 +331,30 @@ void thread_wakeup(int64_t ticks)
 
 	intr_set_level(old_level);
 }
+
+// void thread_wakeup(int64_t ticks)
+// {
+// 	enum intr_level old_level = intr_disable();
+// 	struct list_elem *e = list_begin(&sleep_list);
+// 	while (e != list_end(&sleep_list))
+// 	{
+// 		struct thread *t = list_entry(e, struct thread, elem);
+// 		e = list_next(e); // 다음 원소를 미리 저장
+// 		if (t->wakeup_tick <= ticks)
+// 		{						   // 깨워야 할 시간인지 확인
+// 			list_remove(&t->elem); // sleep_list에서 제거
+// 			thread_unblock(t);	   // 스레드를 깨웁니다.
+// 		}
+// 	}
+
+// 	// sleep_list가 비어있으면 다음에 일어나야 할 시간을 최대로 설정합니다.
+// 	if (list_empty(&sleep_list))
+// 	{
+// 		next_tick_to_wakeup = INT64_MAX;
+// 	}
+
+// 	intr_set_level(old_level);
+// }
 
 // void thread_wakeup(int64_t ticks) /* project 1 */
 // {
@@ -370,13 +407,13 @@ int64_t get_next_tick_to_wakeup(void)
 	return next_tick_to_wakeup;
 }
 
-// /* 두 스레드의 wakeup_tick 값을 비교하는 함수 */
-// static bool compare_ticks(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
-// {
-// 	struct thread *thread_a = list_entry(a, struct thread, elem);
-// 	struct thread *thread_b = list_entry(b, struct thread, elem);
-// 	return thread_a->wakeup_tick < thread_b->wakeup_tick;
-// }
+/* 두 스레드의 wakeup_tick 값을 비교하는 함수 */
+bool compare_ticks(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
+{
+	struct thread *thread_a = list_entry(a, struct thread, elem);
+	struct thread *thread_b = list_entry(b, struct thread, elem);
+	return thread_a->wakeup_tick < thread_b->wakeup_tick;
+}
 
 /* Returns the name of the running thread. */
 const char *

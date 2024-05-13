@@ -134,7 +134,7 @@ void thread_sleep(int64_t ticks);
 void thread_wakeup(int64_t ticks);
 void update_next_tick_to_wakeup(int64_t ticks);
 int64_t get_next_tick_to_wakeup(void);
-// static bool compare_ticks(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+bool compare_ticks(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 
 struct thread *thread_current(void);
 tid_t thread_tid(void);
