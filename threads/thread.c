@@ -468,7 +468,9 @@ void thread_wakeup(int64_t wakeup_ticks)
 		struct list_elem *curr = list_min(&sleep_list, compare_ticks, NULL);
 		struct thread *thread_a = list_entry(curr, struct thread, elem);
 		// printf("test new sleep thread: %lld\n", thread_a->local_tick);
-		if (curr == list_end(&sleep_list)) // tail이 아닐때까지 반복
+
+		// sleep_list가 비어있으면 return
+		if (curr == list_end(&sleep_list))
 			return;
 
 		if (thread_a->local_tick <= wakeup_ticks)
@@ -477,6 +479,9 @@ void thread_wakeup(int64_t wakeup_ticks)
 			list_remove(curr);							// 수면큐에서 깨울 스레드 지우기
 			thread_unblock(thread_a);					// 스레드 차단 해제
 		}
+		// 깨어날 스레드가 없으면 return
+		else
+			return;
 	}
 }
 
