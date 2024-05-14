@@ -257,25 +257,6 @@ void thread_unblock(struct thread *t)
    인터럽트가 꺼진 상태에서 이 함수를 호출해야 합니다.
    일반적으로는 synch.h에 있는 동기화 기본 요소 중 하나를 사용하는 것이 좋습니다.
 */
-// void thread_sleep(int64_t ticks)
-// {
-// 	enum intr_level old_level = intr_disable();
-// 	struct thread *curr_thread = thread_current();
-
-// 	curr_thread->wakeup_tick = ticks; // 이 시간까지 잠들도록 설정
-
-// 	// 다음에 일어나야 할 시간을 업데이트
-// 	update_next_tick_to_wakeup(curr_thread->wakeup_tick);
-
-// 	if (curr_thread != idle_thread)
-// 	{
-// 		// sleep_list에 요소를 정렬된 순서로 삽입합니다.
-// 		list_insert_ordered(&sleep_list, &curr_thread->elem, compare_ticks, NULL);
-// 		thread_block(); // 스레드를 수면 상태로 만듭니다.
-// 	}
-// 	intr_set_level(old_level); // 인터럽트를 활성화
-// }
-
 void thread_sleep(int64_t ticks)
 {
 	enum intr_level old_level = intr_disable();
@@ -288,11 +269,30 @@ void thread_sleep(int64_t ticks)
 
 	if (curr_thread != idle_thread)
 	{
-		list_push_back(&sleep_list, &curr_thread->elem); // sleep_list에 추가
-		thread_block();									 // 스레드를 수면 상태로 만듭니다.
+		// sleep_list에 요소를 정렬된 순서로 삽입합니다.
+		list_insert_ordered(&sleep_list, &curr_thread->elem, compare_ticks, NULL);
+		thread_block(); // 스레드를 수면 상태로 만듭니다.
 	}
 	intr_set_level(old_level); // 인터럽트를 활성화
 }
+
+// void thread_sleep(int64_t ticks)
+// {
+// 	enum intr_level old_level = intr_disable();
+// 	struct thread *curr_thread = thread_current();
+
+// 	curr_thread->wakeup_tick = ticks; // 이 시간까지 잠들도록 설정
+
+// 	// 다음에 일어나야 할 시간을 업데이트
+// 	update_next_tick_to_wakeup(curr_thread->wakeup_tick);
+
+// 	if (curr_thread != idle_thread)
+// 	{
+// 		list_push_back(&sleep_list, &curr_thread->elem); // sleep_list에 추가
+// 		thread_block();									 // 스레드를 수면 상태로 만듭니다.
+// 	}
+// 	intr_set_level(old_level); // 인터럽트를 활성화
+// }
 
 /*
    지정된 틱이 지나면 재우고 있는 스레드를 깨웁니다.
