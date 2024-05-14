@@ -85,7 +85,7 @@ timer_ticks(void)
 
 /* Returns the number of timer ticks elapsed since THEN, which
    should be a value once returned by timer_ticks(). */
-// 인자인 then, 즉 특정시간 이후로 경과한 타이머 틱(tick) 수를 반환
+// 시작 이후로 얼마나 많은 틱이 지났는지 반환하는 함수
 int64_t
 timer_elapsed(int64_t then)
 {
@@ -93,16 +93,29 @@ timer_elapsed(int64_t then)
 }
 
 /* Suspends execution for approximately TICKS timer ticks. */
+// PROJECT 1. 수정해야할 함수
+// 시스템이 idle 상태가 아니라면, 스레드가 정확히 x번의 tick이 발생한 직후에
+// wake up 할 필요가 없다.
+// 스레드가 적절한 시간동안 대기 한 후 ready queue에 놓이게 하라.
 void timer_sleep(int64_t ticks)
 {
-	int64_t start = timer_ticks(); // 현재 시각
+	int64_t start = timer_ticks();
 
 	ASSERT(intr_get_level() == INTR_ON);
-	// while (timer_elapsed(start) < ticks) // start 이 후, 경과된 시간이 ticks보다 커질 때까지 thread_yield()를 호출하여 양보한다
-	// 	thread_yield();
 
+	// busy wait 방식 (기존 구현 코드)
+	// while (timer_elapsed(start) < ticks)
+	// {
+	// 	printf("ticks:%d\n", ticks);
+	// 	thread_yield();
+	// }
+
+	// thread 재우는 로직 필요 (block)
+	// thread_sleep() -> ticks만큼 재운다.
 	if (timer_elapsed(start) < ticks)
-		thread_sleep(start + ticks); // 깨어야 할 시각
+	{
+		thread_sleep(start + ticks); // thread_sleep() 함수 구현 필요
+	}
 }
 
 /* Suspends execution for approximately MS milliseconds. */
@@ -130,16 +143,22 @@ void timer_print_stats(void)
 }
 
 /* Timer interrupt handler. */
+// PROJECT1 수정해야할 부분
 static void
 timer_interrupt(struct intr_frame *args UNUSED)
 {
 	ticks++;
-	thread_tick();
-	/* project 1 */
-	if (get_next_tick_to_wakeup() <= ticks)
-	{
-		thread_wakeup(ticks);
-	}
+	thread_tick(); // update the cpu usage for running process
+
+	/* code to add:
+	   check sleep list and the global tick.
+	   find any threads to wake up,
+	   move them to the ready list if necessary.
+	   update the global tick.
+	*/
+
+	// 깨어날 스레드가 있다면 sleep_list에서 ready_list로 삽입
+	thread_wakeup(ticks); // 일어나야할 시간을 인수로 넘겨줌
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
