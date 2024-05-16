@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "synch.h": "c",
+        "thread.h": "c",
+        "stdio.h": "c",
+        "interrupt.h": "c"
+    }
+}
