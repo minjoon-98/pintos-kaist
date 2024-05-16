@@ -28,6 +28,8 @@ typedef int tid_t;
 #define PRI_DEFAULT 31 /* Default priority. */
 #define PRI_MAX 63	   /* Highest priority. */
 
+#define MAX_NESTED_DEPTH 8 // 우선순위 기부의 최대 재귀 깊이
+
 /* A kernel thread or user process.
  *
  * Each thread structure is stored in its own 4 kB page.  The
@@ -88,15 +90,19 @@ typedef int tid_t;
 struct thread
 {
 	/* Owned by thread.c. */
-	tid_t tid;				   /* Thread identifier. */
-	enum thread_status status; /* Thread state. */
-	char name[16];			   /* Name (for debugging purposes). */
-	int priority;			   /* Priority. */
-
-	int64_t wakeup_tick; // 깨어나야할 tick (wakeup_tick) /* project 1 */
-
+	tid_t tid; /* Thread identifier. */					// 스레드 식별자
+	enum thread_status status; /* Thread state. */		// 스레드 상태를 나타내는 열거형 변수
+	char name[16]; /* Name (for debugging purposes). */ // 디버깅 목적으로 사용되는 스레드 이름을 저장하는 문자열 배열
+	int priority; /* Priority. */						// 스레드의 우선순위를 나타내는 정수 변수
+	int64_t local_tick;									// 스레드의 일어날 시간 변수를 저장하는 정수형 변수
 	/* Shared between thread.c and synch.c. */
-	struct list_elem elem; /* List element. */
+	struct list_elem elem; /* List element. */ // 스레드 리스트에 연결될 때 사용되는 리스트 요소
+
+	// for priority donation
+	int original_priority;			// 스레드의 원래 우선순위를 저장하는 변수
+	struct lock *wait_on_lock;		// 스레드가 대기 중인 락(장치)을 나타내는 포인터 변수
+	struct list donations;			// 우선순위 기부를 추적하기 위한 스레드 리스트
+	struct list_elem donation_elem; // 우선순위 기부 리스트에 연결될 때 사용되는 리스트 요소
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
@@ -129,13 +135,6 @@ tid_t thread_create(const char *name, int priority, thread_func *, void *);
 void thread_block(void);
 void thread_unblock(struct thread *);
 
-/* project 1 */
-void thread_sleep(int64_t ticks);
-void thread_wakeup(int64_t ticks);
-void update_next_tick_to_wakeup(int64_t ticks);
-int64_t get_next_tick_to_wakeup(void);
-bool compare_ticks(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
-
 struct thread *thread_current(void);
 tid_t thread_tid(void);
 const char *thread_name(void);
@@ -152,5 +151,20 @@ int thread_get_recent_cpu(void);
 int thread_get_load_avg(void);
 
 void do_iret(struct intr_frame *tf);
+
+void thread_sleep(int64_t wakeup_ticks);
+void thread_wakeup(int64_t wakeup_ticks);
+
+bool compare_ticks(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+bool compare_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+// bool compare_donate_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED); // 그냥 compare_priority 써도 무방
+
+void preemption_priority(void);
+void refresh_priority(void);
+
+// struct thread *get_max_priority_waiter(struct list *waiters);
+
+void donate_priority(void);
+void remove_donation(struct lock *lock);
 
 #endif /* threads/thread.h */
