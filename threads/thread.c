@@ -1022,7 +1022,8 @@ void donate_priority(void)
 	struct thread *curr_thread = thread_current();
 
 	// 대기 중인 락의 소유자에게 우선순위를 기부
-	for (depth = 0; depth < MAX_NESTED_DEPTH; depth++) // MAX_NESTED_DEPTH를 설정하는 이유: 한한 우선순위 기부 상황 방지
+	// while (curr_thread->wait_on_lock != NULL) // 이렇게 해도 문제 없음
+	for (depth = 0; depth < MAX_NESTED_DEPTH; depth++) // MAX_NESTED_DEPTH를 설정하는 이유: 무한한 우선순위 기부 상황 방지
 	{
 		if (curr_thread->wait_on_lock == NULL)
 		{

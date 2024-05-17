@@ -65,7 +65,7 @@ void sema_down(struct semaphore *sema)
 	ASSERT(!intr_context());
 
 	old_level = intr_disable();
-	while (sema->value == 0)
+	while (sema->value == 0) // if문으로 작성해도 테스트는 통과. while문은 block이 끝난 후, sema->value값은 한번 더 확인해서 두가지 예외 상황을 방지함 (Spurious Wakeup, Lost Wakeups)
 	{
 		// TODO: insert thread at waiters list in order of priority
 		// list_push_back(&sema->waiters, &thread_current()->elem);

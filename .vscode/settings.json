@@ -3,6 +3,7 @@
         "synch.h": "c",
         "thread.h": "c",
         "stdio.h": "c",
-        "interrupt.h": "c"
+        "interrupt.h": "c",
+        "round.h": "c"
     }
 }
