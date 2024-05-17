@@ -962,6 +962,7 @@ bool compare_priority(const struct list_elem *a, const struct list_elem *b, void
 	struct thread *thread_b = list_entry(b, struct thread, elem);
 	return thread_a->priority > thread_b->priority;
 }
+
 // // 그냥 compare_priority 써도 무방
 // // donations리스트에 스레드 추가 시, 내림차순으로 삽입하는 함수
 // bool compare_donate_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
@@ -997,21 +998,6 @@ void preemption_priority(void) /* project 1 priority */
 	}
 }
 
-// /**
-//  * @brief 대기 중인 스레드 목록에서 가장 높은 우선순위를 반환합니다.
-//  *
-//  * @param waiters 대기 중인 스레드 목록을 나타내는 리스트의 시작 포인터
-//  * @return struct thread* 가장 높은 우선순위를 가진 스레드의 포인터
-//  */
-// struct thread *get_max_priority_waiter(struct list *waiters)
-// {
-// 	if (list_empty(waiters))
-// 		return NULL; // 대기 중인 스레드가 없는 경우 NULL 반환
-
-// 	struct thread *max_priority_thread = list_entry(list_max(waiters, compare_priority, NULL), struct thread, elem);
-// 	return max_priority_thread;
-// }
-
 /**
  * @brief donate_priority 함수는 대기 중인 락의 소유자에게 현재 스레드의 우선순위를 기부합니다.
  *        최대 반복 횟수까지 대기 중인 락을 따라가며 우선순위 기부를 처리합니다.
@@ -1022,7 +1008,8 @@ void donate_priority(void)
 	struct thread *curr_thread = thread_current();
 
 	// 대기 중인 락의 소유자에게 우선순위를 기부
-	for (depth = 0; depth < MAX_NESTED_DEPTH; depth++) // MAX_NESTED_DEPTH를 설정하는 이유: 한한 우선순위 기부 상황 방지
+	// while (curr_thread->wait_on_lock != NULL) // 이렇게 해도 문제 없음
+	for (depth = 0; depth < MAX_NESTED_DEPTH; depth++) // MAX_NESTED_DEPTH를 설정하는 이유: 무한한 우선순위 기부 상황 방지
 	{
 		if (curr_thread->wait_on_lock == NULL)
 		{
