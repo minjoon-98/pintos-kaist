@@ -975,16 +975,27 @@ bool compare_priority(const struct list_elem *a, const struct list_elem *b, void
 // 현재 실행 중인 스레드의 우선순위가 ready list의 스레드보다 낮다면 CPU를 양보(yield)하는 함수
 void preemption_priority(void) /* project 1 priority */
 {
+	// 현재 실행 중인 스레드의 우선순위가 ready list의 스레드보다 낮다면 CPU를 양보(yield)하는 함수
+void preemption_priority(void) /* project 1 priority */
+{
 	// 현재 실행 중인 스레드가 idle 스레드인 경우 아무 작업도 필요하지 않으므로 함수 종료
-	if (thread_current() == idle_thread)
-	{
-		return;
-	}
 	// ready list가 비어 있는지 확인하고, 비어 있다면 다른 스레드가 대기 중이 아니므로 함수 종료
-	if (list_empty(&ready_list))
+	if (thread_current() == idle_thread || list_empty(&ready_list))
 	{
 		return;
 	}
+
+	// ready list에서 가장 우선순위가 높은 스레드를 가리키는 포인터를 얻어옴
+	struct list_elem *first = list_front(&ready_list);
+	struct thread *first_t = list_entry(first, struct thread, elem);
+
+	// 현재 실행 중인 스레드의 우선순위가 ready list의 첫 번째 스레드의 우선순위보다 낮은지 확인
+	// 만약 그렇다면, 현재 스레드의 우선순위가 더 낮으므로 다른 스레드에게 CPU를 양보
+	if (!list_empty(&ready_list) && thread_current()->priority < first_t->priority)
+	{
+		thread_yield(); // CPU 양보
+	}
+}
 
 	// ready list에서 가장 우선순위가 높은 스레드를 가리키는 포인터를 얻어옴
 	struct list_elem *first = list_front(&ready_list);
