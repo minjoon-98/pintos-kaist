@@ -526,7 +526,7 @@ int thread_get_priority(void)
 
 /* Sets the current thread's nice value to NICE. */
 /* 현재 스레드의 nice 값을 NICE로 설정합니다.*/
-void thread_set_nice(int new_nice)
+void thread_set_nice(int new_nice UNUSED)
 {
 	/* TODO: Your implementation goes here */
 	ASSERT(NICE_MIN <= new_nice && new_nice <= NICE_MAX)
@@ -876,37 +876,38 @@ thread_launch(struct thread *th)
 static void
 do_schedule(int status)
 {
-	ASSERT(intr_get_level() == INTR_OFF);
-	ASSERT(thread_current()->status == THREAD_RUNNING);
+	ASSERT(intr_get_level() == INTR_OFF);				// 인터럽트가 비활성화 상태여야 함을 확인
+	ASSERT(thread_current()->status == THREAD_RUNNING); // 현재 스레드가 실행 중 상태임을 확인
 	while (!list_empty(&destruction_req))
 	{
+		// destruction_req 리스트에서 스레드를 하나씩 가져와서 메모리 해제
 		struct thread *victim =
 			list_entry(list_pop_front(&destruction_req), struct thread, elem);
-		list_remove(&victim->all_elem); // all_elem 삭제를 thread_exit()이 아닌 do_schedule에서 해주어야한다.
-		palloc_free_page(victim);
+		list_remove(&victim->all_elem); // all_list에서 스레드 제거 // all_elem 삭제를 thread_exit()이 아닌 do_schedule에서 해주어야한다.
+		palloc_free_page(victim);		// 스레드의 메모리 해제
 	}
-	thread_current()->status = status;
-	schedule();
+	thread_current()->status = status; // 현재 스레드의 상태를 설정
+	schedule();						   // 스케줄링을 다시 수행
 }
 
 static void
 schedule(void)
 {
-	struct thread *curr = running_thread();
-	struct thread *next = next_thread_to_run();
+	struct thread *curr = running_thread();		// 현재 실행 중인 스레드를 가져옴
+	struct thread *next = next_thread_to_run(); // 다음에 실행할 스레드를 선택
 
-	ASSERT(intr_get_level() == INTR_OFF);
-	ASSERT(curr->status != THREAD_RUNNING);
-	ASSERT(is_thread(next));
+	ASSERT(intr_get_level() == INTR_OFF);	// 인터럽트가 비활성화 상태여야 함을 확인
+	ASSERT(curr->status != THREAD_RUNNING); // 현재 스레드가 실행 중 상태가 아님을 확인
+	ASSERT(is_thread(next));				// 다음 스레드가 올바른 스레드인지 확인
 	/* Mark us as running. */
-	next->status = THREAD_RUNNING;
+	next->status = THREAD_RUNNING; /* 다음 스레드를 실행 상태로 표시 */
 
 	/* Start new time slice. */
-	thread_ticks = 0;
+	thread_ticks = 0; /* 새로운 time slice를 시작 */
 
 #ifdef USERPROG
 	/* Activate the new address space. */
-	process_activate(next);
+	process_activate(next); /* 새로운 주소 공간을 활성화 */
 #endif
 
 	if (curr != next)
@@ -935,8 +936,8 @@ schedule(void)
 		  */
 		if (curr && curr->status == THREAD_DYING && curr != initial_thread)
 		{
-			ASSERT(curr != next);
-			list_push_back(&destruction_req, &curr->elem);
+			ASSERT(curr != next);						   // 현재 스레드와 다음 스레드가 다름을 확인
+			list_push_back(&destruction_req, &curr->elem); // 현재 스레드를 destruction_req 리스트에 추가
 		}
 
 		/* Before switching the thread, we first save the information
@@ -947,7 +948,7 @@ schedule(void)
 		이는 스레드가 나중에 다시 실행될 때 필요한 상태 정보를 보존하기 위한 중요한 단계입니다.
 		이렇게 정보를 저장함으로써, 시스템은 스레드가 중단된 지점부터 안전하게 재개할 수 있습니다.
 		 */
-		thread_launch(next);
+		thread_launch(next); // 다음 스레드를 실행
 	}
 }
 
@@ -1111,13 +1112,19 @@ void mlfqs_calculate_load_avg(void)
 	// int ready_threads = list_size(&ready_list);
 	int ready_threads;
 
-	// idle thread는 항상 ready_list에 있기에, idle thread가 현재 실행 중인 스레드인 경우 ready_list에 하나의 스레드가 추가
-	if (thread_current() == idle_thread)
-		ready_threads = list_size(&ready_list);
-	else
-		ready_threads = list_size(&ready_list) + 1;
-
-	load_avg = MUL_FP(DIV_FP(CONVERT_INT_TO_FP(59), CONVERT_INT_TO_FP(60)), load_avg) + DIV_FP(CONVERT_INT_TO_FP(1), CONVERT_INT_TO_FP(60)) * ready_threads;
+	/* 현재 실행 중인 스레드가 idle_thread인지 확인
+       idle_thread는 CPU가 유휴 상태임을 나타냅니다. */
+    if (thread_current() == idle_thread)
+        /* CPU가 유휴 상태인 경우, ready_list에 있는 스레드 수를 그대로 사용 */
+        ready_threads = list_size(&ready_list);
+    else
+        /* CPU가 유휴 상태가 아닌 경우, 현재 실행 중인 스레드도 준비 상태로 간주
+           따라서, ready_list에 있는 스레드 수에 1을 더함 */
+        ready_threads = list_size(&ready_list) + 1;
+	
+	// load_avg = MUL_FP(DIV_FP(CONVERT_INT_TO_FP(59), CONVERT_INT_TO_FP(60)), load_avg) + DIV_FP(CONVERT_INT_TO_FP(1), CONVERT_INT_TO_FP(60)) * ready_threads;
+	// 위와 같음
+	load_avg = MUL_FP((CONVERT_INT_TO_FP(59)/ 60), load_avg) + (CONVERT_INT_TO_FP(1) / 60) * ready_threads;
 }
 
 /* 최근 CPU 사용량을 증가시키는 함수.

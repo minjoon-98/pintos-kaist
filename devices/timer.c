@@ -155,17 +155,17 @@ timer_interrupt(struct intr_frame *args UNUSED)
 	{
 		mlfqs_increase_recent_cpu();
 
-		/* 4 tick마다 우선순위를 재계산 */
-		if (timer_ticks() % 4 == 0)
-		{
-			mlfqs_recalculate_priority();
-		}
-
 		/* 매초마다 load_avg와 recent_cpu를 업데이트 */
 		if (timer_ticks() % TIMER_FREQ == 0)
 		{
 			mlfqs_calculate_load_avg();
 			mlfqs_recalculate_recent_cpu();
+		}
+
+		/* 4 tick마다 우선순위를 재계산 */
+		if (timer_ticks() % 4 == 0)
+		{
+			mlfqs_recalculate_priority();
 		}
 	}
 
