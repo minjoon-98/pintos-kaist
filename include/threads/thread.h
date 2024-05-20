@@ -1,3 +1,6 @@
+#ifndef THREAD_H
+#define THREAD_H
+
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
@@ -211,3 +214,5 @@ void mlfqs_calculate_load_avg(void);
 void mlfqs_increase_recent_cpu(void);
 void mlfqs_recalculate_priority(void);
 void mlfqs_recalculate_recent_cpu(void);
+
+#endif /* thread.h */
