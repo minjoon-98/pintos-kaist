@@ -1093,7 +1093,7 @@ void refresh_priority(void)
    t->priority = PRI_MAX - (t->recent_cpu / 4) - (t->nice * 2) */
 void mlfqs_calculate_priority(struct thread *t)
 {
-	t->priority = PRI_MAX - CONVERT_FP_TO_INT_ZERO(t->recent_cpu / 4) - (t->nice * 2);
+	t->priority = PRI_MAX - CONVERT_FP_TO_INT_NEAR(t->recent_cpu / 4) - (t->nice * 2);
 }
 
 /* 스레드의 최근 CPU 사용량을 계산하는 함수.
