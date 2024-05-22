@@ -1,1 +1,0 @@
-source ~/pintos-kaist/activate

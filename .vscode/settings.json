@@ -10,6 +10,14 @@
         "random.h": "c",
         "debug.h": "c",
         "fixed-point.h": "c",
-        "intr-stubs.h": "c"
-    }
+        "intr-stubs.h": "c",
+        "intrinsic.h": "c",
+        "file.h": "c",
+        "process.h": "c",
+        "ctype.h": "c"
+    },
+    "editor.formatOnSave": true,
+    "editor.formatOnPaste": true,
+    "editor.fontWeight": "normal",
+    "editor.fontVariations": false
 }

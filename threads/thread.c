@@ -580,13 +580,11 @@ int thread_get_recent_cpu(void)
    special case when the ready list is empty. */
 
 /* 유휴 스레드. 다른 스레드가 실행 준비가 되어 있지 않을 때 실행됩니다.
-
    유휴 스레드는 처음에 thread_start()에 의해 준비 목록에 올라갑니다.
    처음에 한 번 스케줄되며, 이때 idle_thread를 초기화하고, thread_start()가
    계속될 수 있도록 전달된 세마포어를 "up"시키고 즉시 블록됩니다.
    그 후에는 유휴 스레드가 준비 목록에 나타나지 않습니다.
    준비 목록이 비어 있을 때 특별한 경우로서 next_thread_to_run()에 의해 반환됩니다. */
-
 /* 이 코드는 시스템에 다른 스레드가 실행할 준비가 되어 있지 않을 때 실행되는 특별한 스레드인
  '유휴 스레드(idle thread)'에 대해 설명하고 있습니다. 유휴 스레드는 시스템이 시작될 때 thread_start() 함수에
   의해 준비 목록에 추가되고, 처음에 한 번 스케줄되어 필요한 초기화 작업을 수행합니다.
@@ -594,6 +592,7 @@ int thread_get_recent_cpu(void)
    초기화가 완료된 후 유휴 스레드는 더 이상 준비 목록에 나타나지 않으며,
    준비 목록이 비어 있을 때만 next_thread_to_run() 함수에 의해 선택되어 실행됩니다.
    이는 시스템에 실행할 준비가 된 다른 스레드가 없을 때 CPU가 놀지 않고 유휴 상태를 유지하도록 하는 역할을 합니다.*/
+
 static void
 idle(void *idle_started_ UNUSED)
 {
@@ -871,7 +870,6 @@ thread_launch(struct thread *th)
  *  수행합니다. 또한, schedule() 함수 내에서 printf() 함수를 호출하는 것은 안전하지 않다고 언급되어 있습니다.
  *  이는 schedule() 함수가 중요한 시스템 자원을 조작하는 과정에서 발생할 수 있는 문제를 방지하기
  *  위한 주의 사항입니다.
- *
  *  */
 static void
 do_schedule(int status)

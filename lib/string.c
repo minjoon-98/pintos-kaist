@@ -4,12 +4,13 @@
 /* Copies SIZE bytes from SRC to DST, which must not overlap.
    Returns DST. */
 void *
-memcpy (void *dst_, const void *src_, size_t size) {
+memcpy(void *dst_, const void *src_, size_t size)
+{
 	unsigned char *dst = dst_;
 	const unsigned char *src = src_;
 
-	ASSERT (dst != NULL || size == 0);
-	ASSERT (src != NULL || size == 0);
+	ASSERT(dst != NULL || size == 0);
+	ASSERT(src != NULL || size == 0);
 
 	while (size-- > 0)
 		*dst++ = *src++;
@@ -20,17 +21,21 @@ memcpy (void *dst_, const void *src_, size_t size) {
 /* Copies SIZE bytes from SRC to DST, which are allowed to
    overlap.  Returns DST. */
 void *
-memmove (void *dst_, const void *src_, size_t size) {
+memmove(void *dst_, const void *src_, size_t size)
+{
 	unsigned char *dst = dst_;
 	const unsigned char *src = src_;
 
-	ASSERT (dst != NULL || size == 0);
-	ASSERT (src != NULL || size == 0);
+	ASSERT(dst != NULL || size == 0);
+	ASSERT(src != NULL || size == 0);
 
-	if (dst < src) {
+	if (dst < src)
+	{
 		while (size-- > 0)
 			*dst++ = *src++;
-	} else {
+	}
+	else
+	{
 		dst += size;
 		src += size;
 		while (size-- > 0)
@@ -44,13 +49,13 @@ memmove (void *dst_, const void *src_, size_t size) {
    at A and B.  Returns a positive value if the byte in A is
    greater, a negative value if the byte in B is greater, or zero
    if blocks A and B are equal. */
-int
-memcmp (const void *a_, const void *b_, size_t size) {
+int memcmp(const void *a_, const void *b_, size_t size)
+{
 	const unsigned char *a = a_;
 	const unsigned char *b = b_;
 
-	ASSERT (a != NULL || size == 0);
-	ASSERT (b != NULL || size == 0);
+	ASSERT(a != NULL || size == 0);
+	ASSERT(b != NULL || size == 0);
 
 	for (; size-- > 0; a++, b++)
 		if (*a != *b)
@@ -63,15 +68,16 @@ memcmp (const void *a_, const void *b_, size_t size) {
    char) is greater, a negative value if the character in B (as
    an unsigned char) is greater, or zero if strings A and B are
    equal. */
-int
-strcmp (const char *a_, const char *b_) {
-	const unsigned char *a = (const unsigned char *) a_;
-	const unsigned char *b = (const unsigned char *) b_;
+int strcmp(const char *a_, const char *b_)
+{
+	const unsigned char *a = (const unsigned char *)a_;
+	const unsigned char *b = (const unsigned char *)b_;
 
-	ASSERT (a != NULL);
-	ASSERT (b != NULL);
+	ASSERT(a != NULL);
+	ASSERT(b != NULL);
 
-	while (*a != '\0' && *a == *b) {
+	while (*a != '\0' && *a == *b)
+	{
 		a++;
 		b++;
 	}
@@ -83,15 +89,16 @@ strcmp (const char *a_, const char *b_) {
    SIZE bytes starting at BLOCK.  Returns a null pointer if CH
    does not occur in BLOCK. */
 void *
-memchr (const void *block_, int ch_, size_t size) {
+memchr(const void *block_, int ch_, size_t size)
+{
 	const unsigned char *block = block_;
 	unsigned char ch = ch_;
 
-	ASSERT (block != NULL || size == 0);
+	ASSERT(block != NULL || size == 0);
 
 	for (; size-- > 0; block++)
 		if (*block == ch)
-			return (void *) block;
+			return (void *)block;
 
 	return NULL;
 }
@@ -100,29 +107,43 @@ memchr (const void *block_, int ch_, size_t size) {
    null pointer if C does not appear in STRING.  If C == '\0'
    then returns a pointer to the null terminator at the end of
    STRING. */
+
+/**
+ * @brief 문자열에서 특정 문자를 찾습니다.
+ *
+ * 주어진 문자열에서 특정 문자 C를 처음으로 찾은 위치를 반환합니다.
+ * 만약 C가 문자열에 존재하지 않으면 NULL 포인터를 반환합니다.
+ * C가 '\0'이면 문자열의 null 종결자 위치를 반환합니다.
+ *
+ * @param string 검색할 문자열.
+ * @param c_ 찾을 문자. int형이지만, 실제로는 char형 문자로 변환
+ * @return C를 처음으로 찾은 위치의 포인터 또는 C가 문자열에 없으면 NULL.
+ */
 char *
-strchr (const char *string, int c_) {
+strchr(const char *string, int c_)
+{
 	char c = c_;
 
-	ASSERT (string);
+	ASSERT(string); // string이 NULL이 아닌지 확인
 
-	for (;;)
-		if (*string == c)
-			return (char *) string;
-		else if (*string == '\0')
-			return NULL;
+	for (;;)					   // 무한 루프를 시작
+		if (*string == c)		   // 현재 문자와 C가 같은지 확인
+			return (char *)string; // 같다면 해당 위치의 포인터를 반환
+		else if (*string == '\0')  // 현재 문자가 null 종결자인지 확인
+			return NULL;		   // null 종결자이면 NULL 포인터를 반환
 		else
-			string++;
+			string++; // 다음 문자로 이동
 }
 
 /* Returns the length of the initial substring of STRING that
    consists of characters that are not in STOP. */
 size_t
-strcspn (const char *string, const char *stop) {
+strcspn(const char *string, const char *stop)
+{
 	size_t length;
 
 	for (length = 0; string[length] != '\0'; length++)
-		if (strchr (stop, string[length]) != NULL)
+		if (strchr(stop, string[length]) != NULL)
 			break;
 	return length;
 }
@@ -131,34 +152,37 @@ strcspn (const char *string, const char *stop) {
    also in STOP.  If no character in STRING is in STOP, returns a
    null pointer. */
 char *
-strpbrk (const char *string, const char *stop) {
+strpbrk(const char *string, const char *stop)
+{
 	for (; *string != '\0'; string++)
-		if (strchr (stop, *string) != NULL)
-			return (char *) string;
+		if (strchr(stop, *string) != NULL)
+			return (char *)string;
 	return NULL;
 }
 
 /* Returns a pointer to the last occurrence of C in STRING.
    Returns a null pointer if C does not occur in STRING. */
 char *
-strrchr (const char *string, int c_) {
+strrchr(const char *string, int c_)
+{
 	char c = c_;
 	const char *p = NULL;
 
 	for (; *string != '\0'; string++)
 		if (*string == c)
 			p = string;
-	return (char *) p;
+	return (char *)p;
 }
 
 /* Returns the length of the initial substring of STRING that
    consists of characters in SKIP. */
 size_t
-strspn (const char *string, const char *skip) {
+strspn(const char *string, const char *skip)
+{
 	size_t length;
 
 	for (length = 0; string[length] != '\0'; length++)
-		if (strchr (skip, string[length]) == NULL)
+		if (strchr(skip, string[length]) == NULL)
 			break;
 	return length;
 }
@@ -167,16 +191,18 @@ strspn (const char *string, const char *skip) {
    HAYSTACK.  Returns a null pointer if NEEDLE does not exist
    within HAYSTACK. */
 char *
-strstr (const char *haystack, const char *needle) {
-	size_t haystack_len = strlen (haystack);
-	size_t needle_len = strlen (needle);
+strstr(const char *haystack, const char *needle)
+{
+	size_t haystack_len = strlen(haystack);
+	size_t needle_len = strlen(needle);
 
-	if (haystack_len >= needle_len) {
+	if (haystack_len >= needle_len)
+	{
 		size_t i;
 
 		for (i = 0; i <= haystack_len - needle_len; i++)
-			if (!memcmp (haystack + i, needle, needle_len))
-				return (char *) haystack + i;
+			if (!memcmp(haystack + i, needle, needle_len))
+				return (char *)haystack + i;
 	}
 
 	return NULL;
@@ -215,25 +241,39 @@ outputs:
 'to'
 'tokenize.'
 */
+
+/**
+ * @brief 문자열을 구분자로 나누어 토큰으로 분리합니다.
+ *
+ * @param s 초기 호출 시 토큰화할 문자열, 이후 호출 시 NULL이어야 합니다.
+ * @param delimiters 문자열을 분리하는 구분자들입니다.
+ * @param save_ptr 토큰화 작업의 현재 위치를 저장하는 `char *` 변수의 주소입니다.
+ * @return 다음 토큰을 반환합니다. 더 이상 토큰이 없으면 NULL을 반환합니다.
+ */
 char *
-strtok_r (char *s, const char *delimiters, char **save_ptr) {
+strtok_r(char *s, const char *delimiters, char **save_ptr)
+{
 	char *token;
 
-	ASSERT (delimiters != NULL);
-	ASSERT (save_ptr != NULL);
+	ASSERT(delimiters != NULL);
+	ASSERT(save_ptr != NULL);
 
 	/* If S is nonnull, start from it.
 	   If S is null, start from saved position. */
+	/* S가 NULL이 아니면 S에서 시작하고, NULL이면 저장된 위치에서 시작합니다. */
 	if (s == NULL)
 		s = *save_ptr;
-	ASSERT (s != NULL);
+	ASSERT(s != NULL);
 
-	/* Skip any DELIMITERS at our current position. */
-	while (strchr (delimiters, *s) != NULL) {
+	/* Skip any DELIMITERS at our current position. */ /* 현재 위치에서 구분자를 건너뜁니다. */
+	while (strchr(delimiters, *s) != NULL)
+	{
 		/* strchr() will always return nonnull if we're searching
 		   for a null byte, because every string contains a null
 		   byte (at the end). */
-		if (*s == '\0') {
+		/* strchr() 함수는 항상 널 바이트를 검색할 때 NULL이 아닌 값을 반환합니다. */
+		if (*s == '\0')
+		{
 			*save_ptr = s;
 			return NULL;
 		}
@@ -241,24 +281,27 @@ strtok_r (char *s, const char *delimiters, char **save_ptr) {
 		s++;
 	}
 
-	/* Skip any non-DELIMITERS up to the end of the string. */
+	/* Skip any non-DELIMITERS up to the end of the string. */ /* 구분자가 아닌 문자를 토큰으로 설정합니다. */
 	token = s;
-	while (strchr (delimiters, *s) == NULL)
+	while (strchr(delimiters, *s) == NULL)
 		s++;
-	if (*s != '\0') {
+	if (*s != '\0')
+	{
 		*s = '\0';
 		*save_ptr = s + 1;
-	} else
+	}
+	else
 		*save_ptr = s;
 	return token;
 }
 
 /* Sets the SIZE bytes in DST to VALUE. */
 void *
-memset (void *dst_, int value, size_t size) {
+memset(void *dst_, int value, size_t size)
+{
 	unsigned char *dst = dst_;
 
-	ASSERT (dst != NULL || size == 0);
+	ASSERT(dst != NULL || size == 0);
 
 	while (size-- > 0)
 		*dst++ = value;
@@ -268,10 +311,11 @@ memset (void *dst_, int value, size_t size) {
 
 /* Returns the length of STRING. */
 size_t
-strlen (const char *string) {
+strlen(const char *string)
+{
 	const char *p;
 
-	ASSERT (string);
+	ASSERT(string);
 
 	for (p = string; *p != '\0'; p++)
 		continue;
@@ -281,7 +325,8 @@ strlen (const char *string) {
 /* If STRING is less than MAXLEN characters in length, returns
    its actual length.  Otherwise, returns MAXLEN. */
 size_t
-strnlen (const char *string, size_t maxlen) {
+strnlen(const char *string, size_t maxlen)
+{
 	size_t length;
 
 	for (length = 0; string[length] != '\0' && length < maxlen; length++)
@@ -299,18 +344,20 @@ strnlen (const char *string, size_t maxlen) {
 http://www.courtesan.com/todd/papers/strlcpy.html for
 information on strlcpy(). */
 size_t
-strlcpy (char *dst, const char *src, size_t size) {
+strlcpy(char *dst, const char *src, size_t size)
+{
 	size_t src_len;
 
-	ASSERT (dst != NULL);
-	ASSERT (src != NULL);
+	ASSERT(dst != NULL);
+	ASSERT(src != NULL);
 
-	src_len = strlen (src);
-	if (size > 0) {
+	src_len = strlen(src);
+	if (size > 0)
+	{
 		size_t dst_len = size - 1;
 		if (src_len < dst_len)
 			dst_len = src_len;
-		memcpy (dst, src, dst_len);
+		memcpy(dst, src, dst_len);
 		dst[dst_len] = '\0';
 	}
 	return src_len;
@@ -327,21 +374,22 @@ strlcpy (char *dst, const char *src, size_t size) {
 http://www.courtesan.com/todd/papers/strlcpy.html for
 information on strlcpy(). */
 size_t
-strlcat (char *dst, const char *src, size_t size) {
+strlcat(char *dst, const char *src, size_t size)
+{
 	size_t src_len, dst_len;
 
-	ASSERT (dst != NULL);
-	ASSERT (src != NULL);
+	ASSERT(dst != NULL);
+	ASSERT(src != NULL);
 
-	src_len = strlen (src);
-	dst_len = strlen (dst);
-	if (size > 0 && dst_len < size) {
+	src_len = strlen(src);
+	dst_len = strlen(dst);
+	if (size > 0 && dst_len < size)
+	{
 		size_t copy_cnt = size - dst_len - 1;
 		if (src_len < copy_cnt)
 			copy_cnt = src_len;
-		memcpy (dst + dst_len, src, copy_cnt);
+		memcpy(dst + dst_len, src, copy_cnt);
 		dst[dst_len + copy_cnt] = '\0';
 	}
 	return src_len + dst_len;
 }
-
