@@ -14,7 +14,14 @@
         "intrinsic.h": "c",
         "file.h": "c",
         "process.h": "c",
-        "ctype.h": "c"
+        "ctype.h": "c",
+        "syscall-nr.h": "c",
+        "syscall.h": "c",
+        "init.h": "c",
+        "stddef.h": "c",
+        "vaddr.h": "c",
+        "flags.h": "c",
+        "list.h": "c"
     },
     "editor.formatOnSave": true,
     "editor.formatOnPaste": true,

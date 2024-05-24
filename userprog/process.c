@@ -50,10 +50,10 @@ process_init(void)
  */
 tid_t process_create_initd(const char *file_name)
 {
-	char *fn_copy; // 파일 이름의 복사본을 저장할 포인터
-	// char *exec_name; // 실행할 파일의 이름을 추출하여 저장할 포인터
-	char *save_ptr; // strtok_r 함수를 사용하여 토큰을 추출할 때 사용할 포인터
-	tid_t tid;		// 생성된 스레드의 ID를 저장할 변수
+	char *fn_copy;	 // 파일 이름의 복사본을 저장할 포인터
+	char *exec_name; // 실행할 파일의 이름을 추출하여 저장할 포인터
+	char *save_ptr;	 // strtok_r 함수를 사용하여 토큰을 추출할 때 사용할 포인터
+	tid_t tid;		 // 생성된 스레드의 ID를 저장할 변수
 
 	/* Make a copy of FILE_NAME.
 	 * Otherwise there's a race between the caller and load(). */
@@ -63,10 +63,10 @@ tid_t process_create_initd(const char *file_name)
 	strlcpy(fn_copy, file_name, PGSIZE); // file_name의 복사본을 fn_copy에 저장 (PGSIZE를 넘지 않도록 주의)
 
 	// /* Extract the first token from FILE_NAME. */	 /* FILE_NAME에서 첫 번째 토큰을 추출합니다. */
-	// exec_name = strtok_r(file_name, " ", &save_ptr); // 공백을 기준으로 첫 번째 토큰을 추출하여 save_ptr에 저장합니다.
+	exec_name = strtok_r(file_name, " ", &save_ptr); // 공백을 기준으로 첫 번째 토큰을 추출하여 save_ptr에 저장합니다.
 
 	/* Create a new thread to execute FILE_NAME. */				 /* FILE_NAME을 실행할 새로운 스레드를 생성합니다. */
-	tid = thread_create(file_name, PRI_DEFAULT, initd, fn_copy); // file_name을 실행할 새로운 스레드를 생성합니다.
+	tid = thread_create(exec_name, PRI_DEFAULT, initd, fn_copy); // file_name을 실행할 새로운 스레드를 생성합니다.
 	if (tid == TID_ERROR)										 // 스레드 생성에 실패한 경우
 		palloc_free_page(fn_copy);								 // 할당된 메모리를 해제합니다.
 	return tid;													 // 생성된 스레드의 ID를 반환합니다.
@@ -244,7 +244,7 @@ int process_exec(void *f_name)
 	_if.R.rdi = argc;
 
 	// 유저 스택 메모리 확인 (디버깅용)
-	hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)_if.rsp, true); /* 유저 스택의 내용을 16진수로 출력합니다 */
+	// hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)_if.rsp, true); /* 유저 스택의 내용을 16진수로 출력합니다 */
 
 	/* 페이지 할당 해제 */
 	palloc_free_page(file_name);
@@ -738,7 +738,7 @@ void argument_stack(char **argv, int argc, void **rsp)
 	// printf("Starting argument_stack\n"); /* Debug */
 	// printf("Initial rsp: %p\n", *rsp);	 /* Debug */
 
-	// 스택에 인자들을 저장합니다.
+	// 1. 데이터를 스택에 넣어준다. // 스택에 인자들을 저장합니다.
 	for (i = argc - 1; i >= 0; i--)
 	{
 		*rsp -= strlen(argv[i]) + 1;
@@ -747,7 +747,7 @@ void argument_stack(char **argv, int argc, void **rsp)
 		// printf("Pushed argument %d: %s at %p\n", i, argv[i], *rsp); /* Debug */
 	}
 
-	// 스택 포인터를 8바이트 단위로 정렬합니다.
+	// 2. 단어 정렬을 위해 8의 배수로 맞춰준다. // 스택 포인터를 8바이트 단위로 정렬합니다.
 	while ((uintptr_t)*rsp % 8 != 0)
 	{
 		*rsp -= 1;
@@ -755,7 +755,7 @@ void argument_stack(char **argv, int argc, void **rsp)
 	}
 	// printf("Stack aligned to 8 bytes: %p\n", *rsp); /* Debug */
 
-	// NULL 포인터를 스택에 저장합니다 (argv[argc] = NULL).
+	// NULL 포인터를 스택에 저장합니다 (argv[argc] = NULL). // "\0"을 통해 스트링이 끝났다는 것을 C standard가 알 수 있음.
 	*rsp -= sizeof(char *);
 	*(char **)(*rsp) = NULL;
 	// printf("Pushed NULL sentinel at %p\n", *rsp); /* Debug */
@@ -768,15 +768,15 @@ void argument_stack(char **argv, int argc, void **rsp)
 		// printf("Pushed argv[%d] address: %p\n", i, arg_addresses[i]); /* Debug */
 	}
 
-	// argv (첫 번째 인자의 포인터)를 스택에 저장합니다.
-	*rsp -= sizeof(char **);
-	*(char ***)(*rsp) = (char **)(*rsp + sizeof(char **));
-	// printf("Pushed argv pointer at %p\n", *rsp); /* Debug */
+	// // argv (첫 번째 인자의 포인터)를 스택에 저장합니다.
+	// *rsp -= sizeof(char **);
+	// *(char ***)(*rsp) = (char **)(*rsp + sizeof(char **));
+	// // printf("Pushed argv pointer at %p\n", *rsp); /* Debug */
 
-	// argc (인자의 개수)를 스택에 저장합니다.
-	*rsp -= sizeof(int);
-	*(int *)(*rsp) = argc;
-	// printf("Pushed argc: %d at %p\n", argc, *rsp); /* Debug */
+	// // argc (인자의 개수)를 스택에 저장합니다.
+	// *rsp -= sizeof(int);
+	// *(int *)(*rsp) = argc;
+	// // printf("Pushed argc: %d at %p\n", argc, *rsp); /* Debug */
 
 	// 가짜 반환 주소를 스택에 저장합니다.
 	*rsp -= sizeof(void *);
@@ -785,78 +785,3 @@ void argument_stack(char **argv, int argc, void **rsp)
 
 	// printf("Finished argument_stack\n"); /* Debug */
 }
-
-// void argument_stack(char **argv, int argc, void **rsp)
-// {
-// 	// Save argument strings (character by character)
-// 	for (int i = argc - 1; i >= 0; i--)
-// 	{
-// 		int argv_len = strlen(argv[i]);
-// 		for (int j = argv_len; j >= 0; j--)
-// 		{
-// 			char argv_char = argv[i][j];
-// 			(*rsp)--;
-// 			**(char **)rsp = argv_char; // 1 byte
-// 		}
-// 		argv[i] = *(char **)rsp; // 배열에 rsp 주소 넣기
-// 	}
-
-// 	// Word-align padding
-// 	int pad = (int)*rsp % 8;
-// 	for (int k = 0; k < pad; k++)
-// 	{
-// 		(*rsp)--;
-// 		**(uint8_t **)rsp = 0;
-// 	}
-
-// 	// Pointers to the argument strings
-// 	(*rsp) -= 8;
-// 	**(char ***)rsp = 0;
-
-// 	for (int i = argc - 1; i >= 0; i--)
-// 	{
-// 		(*rsp) -= 8;
-// 		**(char ***)rsp = argv[i];
-// 	}
-
-// 	// Return address
-// 	(*rsp) -= 8;
-// 	**(void ***)rsp = 0;
-// }
-
-// void argument_stack(char **parse, int count, void **rsp) // 주소를 전달받았으므로 이중 포인터 사용
-// {
-// 	// 프로그램 이름, 인자 문자열 push
-// 	for (int i = count - 1; i > -1; i--)
-// 	{
-// 		for (int j = strlen(parse[i]); j > -1; j--)
-// 		{
-// 			(*rsp)--;					  // 스택 주소 감소
-// 			**(char **)rsp = parse[i][j]; // 주소에 문자 저장
-// 		}
-// 		parse[i] = *(char **)rsp; // parse[i]에 현재 rsp의 값 저장해둠(지금 저장한 인자가 시작하는 주소값)
-// 	}
-
-// 	// 정렬 패딩 push
-// 	int padding = (int)*rsp % 8;
-// 	for (int i = 0; i < padding; i++)
-// 	{
-// 		(*rsp)--;
-// 		**(uint8_t **)rsp = 0; // rsp 직전까지 값 채움
-// 	}
-
-// 	// 인자 문자열 종료를 나타내는 0 push
-// 	(*rsp) -= 8;
-// 	**(char ***)rsp = 0; // char* 타입의 0 추가
-
-// 	// 각 인자 문자열의 주소 push
-// 	for (int i = count - 1; i > -1; i--)
-// 	{
-// 		(*rsp) -= 8;				// 다음 주소로 이동
-// 		**(char ***)rsp = parse[i]; // char* 타입의 주소 추가
-// 	}
-
-// 	// return address push
-// 	(*rsp) -= 8;
-// 	**(void ***)rsp = 0; // void* 타입의 0 추가
-// }

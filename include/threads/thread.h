@@ -30,6 +30,8 @@ typedef int tid_t;
 
 #define MAX_NESTED_DEPTH 8 // 우선순위 기부의 최대 재귀 깊이
 
+#define MAX_FILES 128 // 스레드당 최대 열 수 있는 파일 수 /* project 2 system call */
+
 /*---------------------------mlfqs 매크로 함수-------------------------------*/
 /* threads/fixed-point.h */
 // #ifndef THREADS_FIXED_POINT_H
@@ -145,6 +147,10 @@ struct thread
 	/* 4BSD */
 	int nice;
 	int recent_cpu;
+
+	/* project 2 system call */
+	struct file *fd_table[MAX_FILES]; // 파일 디스크립터 테이블
+	int next_fd;					  // 다음에 사용할 파일 디스크립터 번호
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
