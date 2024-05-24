@@ -10,6 +10,7 @@
 #include "threads/vaddr.h"
 #include "threads/init.h"
 #include "filesys/filesys.h"
+#include "filesys/file.h"
 
 // #include "lib/user/syscall.h" /* makefile 에 이 경로가 포함이 안되어있어서 안되는 듯... makefile까지 건드는건 오바인거 같아서 이 방법은 폐기! */
 // 위 경로의 syscall은 유저와 커널 간 인터페이스! 따라서 따로 구현해야함!!!
@@ -22,6 +23,7 @@ void check_address(void *addr);
 void get_argument(void *rsp, int *argv, int argc);
 
 /* Projects 2 and later. */
+
 void halt(void);
 void exit(int status);
 // pid_t fork (const char *thread_name);
@@ -29,13 +31,13 @@ void exit(int status);
 // int wait (pid_t pid);
 bool create(const char *file, unsigned initial_size);
 bool remove(const char *file);
-// int open(const char *file);
-// int filesize(int fd);
+int open(const char *file);
+int filesize(int fd);
 int read(int fd, void *buffer, unsigned size);
 int write(int fd, const void *buffer, unsigned size);
-// void seek(int fd, unsigned position);
-// unsigned tell(int fd);
-// void close(int fd);
+void seek(int fd, unsigned position);
+unsigned tell(int fd);
+void close(int fd);
 
 /* System call.
  *
@@ -91,36 +93,33 @@ void syscall_handler(struct intr_frame *f UNUSED)
 	case SYS_REMOVE: /* Remove the file with the given name. */
 		f->R.rax = remove((const char *)f->R.rdi);
 		break;
-	// case SYS_OPEN: /* Open the file with the given name. */
-	// 	f->R.rax = open((const char *)f->R.rdi);
-	// 	break;
-	// case SYS_FILESIZE: /* Get the size of the open file. */
-	// 	f->R.rax = filesize((int)f->R.rdi);
-	// 	break;
+	case SYS_OPEN: /* Open the file with the given name. */
+		f->R.rax = open((const char *)f->R.rdi);
+		break;
+	case SYS_FILESIZE: /* Get the size of the open file. */
+		f->R.rax = filesize((int)f->R.rdi);
+		break;
 	case SYS_READ: /* Read from an open file. */
 		f->R.rax = read((int)f->R.rdi, (void *)f->R.rsi, (unsigned)f->R.rdx);
 		break;
 	case SYS_WRITE: /* Write to an open file. */
 		f->R.rax = write((int)f->R.rdi, (const void *)f->R.rsi, (unsigned)f->R.rdx);
 		break;
-	// case SYS_SEEK: /* Change the next byte to be read or written in an open file. */
-	// 	seek((int)f->R.rdi, (unsigned)f->R.rsi);
-	// 	break;
-	// case SYS_TELL: /* Get the position of the next byte to be read or written in an open file. */
-	// 	f->R.rax = tell((int)f->R.rdi);
-	// 	break;
-	// case SYS_CLOSE: /* Close an open file. */
-	// 	close((int)f->R.rdi);
-	// 	break;
+	case SYS_SEEK: /* Change the next byte to be read or written in an open file. */
+		seek((int)f->R.rdi, (unsigned)f->R.rsi);
+		break;
+	case SYS_TELL: /* Get the position of the next byte to be read or written in an open file. */
+		f->R.rax = tell((int)f->R.rdi);
+		break;
+	case SYS_CLOSE: /* Close an open file. */
+		close((int)f->R.rdi);
+		break;
 	default:
 		// 지원되지 않는 시스템 콜 처리
 		printf("Unknown system call: %d\n", syscall_number);
 		thread_exit();
 	}
 }
-// 	}
-// 	thread_exit();
-// }
 
 /* Check if the address is in user space */
 void check_address(void *addr)
@@ -144,12 +143,31 @@ void get_argument(void *rsp, int *argv, int argc)
 	}
 }
 
+/**
+ * This function calls power_off() to shut down Pintos.
+ * It should be used sparingly, as it might result in losing important information
+ * such as deadlock situations.
+ */
+
+/**
+ * @brief Halts the operating system.
+ */
 void halt(void)
 {
 	// power_off()를 호출해서 Pintos를 종료
 	power_off(); // 이 함수는 웬만하면 사용되지 않아야 합니다. deadlock 상황에 대한 정보 등등 뭔가 조금 잃어 버릴지도 모릅니다.
 }
 
+/**
+ * This function retrieves the currently running thread's structure,
+ * prints the process termination message, and terminates the thread.
+ */
+
+/**
+ * @brief Exits the current process.
+ *
+ * @param status The exit status of the process.
+ */
 void exit(int status)
 {
 	/* 실행중인 스레드 구조체를 가져옴 */
@@ -161,6 +179,18 @@ void exit(int status)
 	thread_exit();
 }
 
+/**
+ * This function creates a new file with the specified name and initial size.
+ * It checks the validity of the file name address before creating the file.
+ */
+
+/**
+ * @brief Creates a new file.
+ *
+ * @param file The name of the file to create.
+ * @param initial_size The initial size of the file.
+ * @return True if the file was successfully created, false otherwise.
+ */
 bool create(const char *file, unsigned initial_size)
 {
 	/* 파일 이름과 크기에 해당하는 파일 생성 */
@@ -170,6 +200,17 @@ bool create(const char *file, unsigned initial_size)
 	return filesys_create(file, initial_size);
 }
 
+/**
+ * This function removes the file with the specified name.
+ * It checks the validity of the file name address before removing the file.
+ */
+
+/**
+ * @brief Removes a file.
+ *
+ * @param file The name of the file to remove.
+ * @return True if the file was successfully removed, false otherwise.
+ */
 bool remove(const char *file)
 {
 	/* 파일 이름에 해당하는 파일을 제거 */
@@ -179,86 +220,131 @@ bool remove(const char *file)
 	return filesys_remove(file);
 }
 
-// int open(const char *file)
-// {
-// 	check_address((void *)file);
-// 	struct file *f = filesys_open(file);
-// 	if (!f)
-// 	{
-// 		return -1;
-// 	}
-// 	int fd = thread_current()->next_fd++;
-// 	thread_current()->fd_table[fd] = f;
-// 	return fd;
-// }
+/**
+ * @brief Opens a file and returns a file descriptor.
+ *
+ * @param file The name of the file to open.
+ * @return The file descriptor if successful, -1 otherwise.
+ */
+int open(const char *file)
+{
+	check_address((void *)file);		 // 주어진 파일 이름 주소가 유효한지 확인합니다.
+	struct file *f = filesys_open(file); // 파일 시스템에서 파일을 엽니다.
+	if (!f)
+	{
+		return -1; // 파일을 열 수 없는 경우 -1을 반환합니다.
+	}
+	int fd = thread_current()->next_fd++; // 다음 파일 디스크립터를 가져오고 증가시킵니다.
+	thread_current()->fd_table[fd] = f;	  // 파일 디스크립터 테이블에 파일 포인터를 저장합니다.
+	return fd;							  // 파일 디스크립터를 반환합니다.
+}
 
-// int filesize(int fd)
-// {
-// 	struct file *f = thread_current()->fd_table[fd];
-// 	if (!f)
-// 	{
-// 		return -1;
-// 	}
-// 	return file_length(f);
-// }
+/**
+ * @brief Returns the size of the file in bytes.
+ *
+ * @param fd The file descriptor of the file.
+ * @return The size of the file in bytes if successful, -1 otherwise.
+ */
+int filesize(int fd)
+{
+	struct file *f = thread_current()->fd_table[fd]; // 파일 디스크립터 테이블에서 파일 포인터를 가져옵니다.
+	if (!f)
+	{
+		return -1; // 파일이 열려 있지 않은 경우 -1을 반환합니다.
+	}
+	return file_length(f); // 파일의 길이를 반환합니다.
+}
 
+/**
+ * @brief Reads data from a file into a buffer.
+ *
+ * @param fd The file descriptor of the file.
+ * @param buffer The buffer to store the data.
+ * @param size The number of bytes to read.
+ * @return The number of bytes read if successful, -1 otherwise.
+ */
 int read(int fd, void *buffer, unsigned size)
 {
-	check_address(buffer);
+	check_address(buffer); // 주어진 버퍼 주소가 유효한지 확인합니다.
 	if (fd == STDIN_FILENO)
 	{
 		// stdin에서 읽는 경우 처리
-		return -1;
+		return -1; // 표준 입력에서 읽는 경우는 현재 지원하지 않으므로 -1을 반환합니다.
 	}
-	// struct file *f = thread_current()->fd_table[fd];
-	// if (!f)
-	// {
-	// 	return -1;
-	// }
-	// return file_read(f, buffer, size);
+	struct file *f = thread_current()->fd_table[fd]; // 파일 디스크립터 테이블에서 파일 포인터를 가져옵니다.
+	if (!f)
+	{
+		return -1; // 파일이 열려 있지 않은 경우 -1을 반환합니다.
+	}
+	return file_read(f, buffer, size); // 파일에서 데이터를 읽고, 읽은 바이트 수를 반환합니다.
 }
 
+/**
+ * @brief Writes data from a buffer to a file.
+ *
+ * @param fd The file descriptor of the file.
+ * @param buffer The buffer containing the data.
+ * @param size The number of bytes to write.
+ * @return The number of bytes written if successful, -1 otherwise.
+ */
 int write(int fd, const void *buffer, unsigned size)
 {
-	check_address((void *)buffer);
+	check_address((void *)buffer); // 주어진 버퍼 주소가 유효한지 확인합니다.
 	if (fd == STDOUT_FILENO)
 	{
-		putbuf(buffer, size);
-		return size;
+		putbuf(buffer, size); // 표준 출력에 데이터를 씁니다.
+		return size;		  // 쓴 바이트 수를 반환합니다.
 	}
-	// struct file *f = thread_current()->fd_table[fd];
-	// if (!f)
-	// {
-	// 	return -1;
-	// }
-	// return file_write(f, buffer, size);
+	struct file *f = thread_current()->fd_table[fd]; // 파일 디스크립터 테이블에서 파일 포인터를 가져옵니다.
+	if (!f)
+	{
+		return -1; // 파일이 열려 있지 않은 경우 -1을 반환합니다.
+	}
+	return file_write(f, buffer, size); // 파일에 데이터를 쓰고, 쓴 바이트 수를 반환합니다.
 }
 
-// void seek(int fd, unsigned position)
-// {
-// 	struct file *f = thread_current()->fd_table[fd];
-// 	if (f)
-// 	{
-// 		file_seek(f, position);
-// 	}
-// }
+/**
+ * @brief Sets the file position to a given value.
+ *
+ * @param fd The file descriptor of the file.
+ * @param position The new position in the file.
+ */
+void seek(int fd, unsigned position)
+{
+	struct file *f = thread_current()->fd_table[fd]; // 파일 디스크립터 테이블에서 파일 포인터를 가져옵니다.
+	if (f)
+	{
+		file_seek(f, position); // 파일의 위치를 지정한 위치로 이동합니다.
+	}
+}
 
-// unsigned tell(int fd)
-// {
-// 	struct file *f = thread_current()->fd_table[fd];
-// 	if (f)
-// 	{
-// 		return file_tell(f);
-// 	}
-// 	return -1;
-// }
+/**
+ * @brief Returns the current position in the file.
+ *
+ * @param fd The file descriptor of the file.
+ * @return The current position in the file if successful, -1 otherwise.
+ */
+unsigned tell(int fd)
+{
+	struct file *f = thread_current()->fd_table[fd]; // 파일 디스크립터 테이블에서 파일 포인터를 가져옵니다.
+	if (f)
+	{
+		return file_tell(f); // 파일의 현재 위치를 반환합니다.
+	}
+	return -1; // 파일이 열려 있지 않은 경우 -1을 반환합니다.
+}
 
-// void close(int fd)
-// {
-// 	struct file *f = thread_current()->fd_table[fd];
-// 	if (f)
-// 	{
-// 		file_close(f);
-// 		thread_current()->fd_table[fd] = NULL;
-// 	}
-// }
+/**
+ * @brief Closes the file.
+ *
+ * @param fd The file descriptor of the file.
+ */
+void close(int fd)
+{
+	struct file *f = thread_current()->fd_table[fd]; // 파일 디스크립터 테이블에서 파일 포인터를 가져옵니다.
+	if (f)
+	{
+		file_close(f);						   // 파일을 닫습니다.
+		thread_current()->fd_table[fd] = NULL; // 파일 디스크립터 테이블에서 파일 포인터를 제거합니다.
+	}
+}

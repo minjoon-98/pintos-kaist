@@ -271,7 +271,9 @@ int process_wait(tid_t child_tid UNUSED)
 	 * XXX:       implementing the process_wait. */
 	for (int i = 0; i < 1000000000; i++)
 	{
+		/* code */
 	}
+
 	return -1;
 }
 
