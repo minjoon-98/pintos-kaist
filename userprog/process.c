@@ -28,6 +28,8 @@ static void initd(void *f_name);
 static void __do_fork(void *);
 
 void argument_stack(char **argv, int argc, void **rsp);
+struct thread *get_child_process(int pid);
+void remove_child_process(struct thread *cp);
 
 /* General process initializer for initd and other process. */
 static void
@@ -94,11 +96,54 @@ tid_t process_fork(const char *name, struct intr_frame *if_ UNUSED)
 	/* Clone current thread to new thread.*/
 	return thread_create(name,
 						 PRI_DEFAULT, __do_fork, thread_current());
+	// // /* Clone current thread to new thread.*/
+	// // return thread_create(name, PRI_DEFAULT, __do_fork, thread_current());
+	// /* project 2 system call */
+	// struct thread *parent = thread_current();
+
+	// /* Save the parent's intr_frame in a global variable */
+	// memcpy(&parent->parent_if, if_, sizeof(struct intr_frame)); // 부모 프로세스 메모리를 복사
+
+	// tid_t child_tid = thread_create(name, PRI_DEFAULT, __do_fork, parent); // 전달받은 thread_name으로 __do_fork()를 진행
+
+	// if (child_tid == TID_ERROR)
+	// {
+	// 	return TID_ERROR;
+	// }
+
+	// struct thread *child = get_child_process(child_tid);
+	// if (child == NULL)
+	// 	return TID_ERROR;
+
+	// /* Ensure parent waits for the child to successfully clone */
+	// // sema_down(&child->load_sema);
+
+	// // if (child->exit_status == -1)
+	// // 	return TID_ERROR;
+	// if (child->exit_status == -2)
+	// {
+	// 	// 자식이 완전히 종료되고 스케줄링이 이어질 수 있도록 자식에게 signal을 보낸다.
+	// 	// sema_up(&child->exit_sema);
+	// 	// 자식 프로세스의 pid가 아닌 TID_ERROR를 반환한다.
+	// 	return TID_ERROR;
+	// }
+
+	// return child_tid;
 }
 
 #ifndef VM
 /* Duplicate the parent's address space by passing this function to the
  * pml4_for_each. This is only for the project 2. */
+
+/**
+ * @brief 부모의 주소 공간을 복사하기 위해 pml4_for_each에 전달되는 함수입니다.
+ *
+ * @param pte 페이지 테이블 엔트리에 대한 포인터입니다.
+ * @param va 가상 주소입니다.
+ * @param aux 부모 스레드에 대한 포인터입니다.
+ *
+ * @return 성공하면 true, 실패하면 false를 반환합니다.
+ */
 static bool
 duplicate_pte(uint64_t *pte, void *va, void *aux)
 {
@@ -108,23 +153,37 @@ duplicate_pte(uint64_t *pte, void *va, void *aux)
 	void *newpage;
 	bool writable;
 
-	/* 1. TODO: If the parent_page is kernel page, then return immediately. */
-
-	/* 2. Resolve VA from the parent's page map level 4. */
+	/* 1. TODO: If the parent_page is kernel page, then return immediately. */ /* 1. 부모의 페이지가 커널 페이지이면 즉시 반환 */
+	if (is_kernel_vaddr(va))
+		return true;
+	/* 2. Resolve VA from the parent's page map level 4. */ /* 2. 부모의 pml4에서 VA를 해석하여 페이지를 가져옵니다. */
 	parent_page = pml4_get_page(parent->pml4, va);
+	if (parent_page == NULL)
+		return false;
 
 	/* 3. TODO: Allocate new PAL_USER page for the child and set result to
 	 *    TODO: NEWPAGE. */
+	/* 3. 자식을 위해 새로운 PAL_USER 페이지를 할당하고 NEWPAGE에 설정합니다. */
+	newpage = palloc_get_page(PAL_USER | PAL_ZERO); // PAL_USER 플래그 : 사용자 페이지를 할당, PAL_ZERO 플래그 : 할당된 페이지를 0으로 초기화
+	if (newpage == NULL)
+		return false;
 
 	/* 4. TODO: Duplicate parent's page to the new page and
 	 *    TODO: check whether parent's page is writable or not (set WRITABLE
 	 *    TODO: according to the result). */
+	/* 4. 부모의 페이지를 새로운 페이지로 복사하고, 부모의 페이지가 쓰기 가능한지 확인합니다. */
+	memcpy(newpage, parent_page, PGSIZE);
+	writable = is_writable(pte);
 
 	/* 5. Add new page to child's page table at address VA with WRITABLE
 	 *    permission. */
+	/* 5. VA 주소에 새로운 페이지를 쓰기 가능한 권한으로 자식의 페이지 테이블에 추가합니다. */
 	if (!pml4_set_page(current->pml4, va, newpage, writable))
 	{
 		/* 6. TODO: if fail to insert page, do error handling. */
+		/* 6. 페이지 삽입에 실패하면 오류를 처리합니다. */
+		palloc_free_page(newpage);
+		return false;
 	}
 	return true;
 }
@@ -141,11 +200,12 @@ __do_fork(void *aux)
 	struct thread *parent = (struct thread *)aux;
 	struct thread *current = thread_current();
 	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
-	struct intr_frame *parent_if;
+	struct intr_frame *parent_if = &parent->parent_if;
 	bool succ = true;
 
 	/* 1. Read the cpu context to local stack. */
 	memcpy(&if_, parent_if, sizeof(struct intr_frame));
+	if_.R.rax = 0; // 자식 프로세스의 리턴값은 0
 
 	/* 2. Duplicate PT */
 	current->pml4 = pml4_create();
@@ -168,13 +228,30 @@ __do_fork(void *aux)
 	 * TODO:       from the fork() until this function successfully duplicates
 	 * TODO:       the resources of parent.*/
 
+	/* Duplicate file descriptors */ /* 파일 디스크립터 복제 */
+	for (int fd = 0; fd < MAX_FILES; fd++)
+	{
+		if (parent->fd_table[fd] != NULL)
+		{
+			current->fd_table[fd] = file_duplicate(parent->fd_table[fd]);
+			if (current->fd_table[fd] == NULL)
+				goto error;
+		}
+	}
+	current->next_fd = parent->next_fd; // next_fd도 복제
+
+	// /* Notify parent that fork is successful */
+	// // sema_up(&current->load_sema); // 로드가 완료될 때까지 기다리고 있던 부모 대기 해제
 	process_init();
 
 	/* Finally, switch to the newly created process. */
 	if (succ)
 		do_iret(&if_);
 error:
+	current->exit_status = TID_ERROR;
 	thread_exit();
+	// sema_up(&current->load_sema);
+	// exit(-2);
 }
 
 /* Switch the current execution context to the f_name.
@@ -255,6 +332,69 @@ int process_exec(void *f_name)
 	NOT_REACHED();
 }
 
+/**
+ * @brief 프로그램 이름과 인자들을 유저 스택에 저장하는 함수
+ *
+ * @param argv 프로그램 이름과 인자가 저장된 메모리 공간의 포인터 배열
+ * @param argc 인자의 개수
+ * @param rsp 스택 포인터를 가리키는 주소
+ */
+void argument_stack(char **argv, int argc, void **rsp)
+{
+	int i;
+	char *arg_addresses[argc];
+
+	// printf("Starting argument_stack\n"); /* Debug */
+	// printf("Initial rsp: %p\n", *rsp);	 /* Debug */
+
+	// 1. 데이터를 스택에 넣어준다. // 스택에 인자들을 저장합니다.
+	for (i = argc - 1; i >= 0; i--)
+	{
+		*rsp -= strlen(argv[i]) + 1;
+		memcpy(*rsp, argv[i], strlen(argv[i]) + 1);
+		arg_addresses[i] = *rsp;
+		// printf("Pushed argument %d: %s at %p\n", i, argv[i], *rsp); /* Debug */
+	}
+
+	// 2. 단어 정렬을 위해 8의 배수로 맞춰준다. // 스택 포인터를 8바이트 단위로 정렬합니다.
+	while ((uintptr_t)*rsp % 8 != 0)
+	{
+		*rsp -= 1;
+		*(uint8_t *)(*rsp) = 0;
+	}
+	// printf("Stack aligned to 8 bytes: %p\n", *rsp); /* Debug */
+
+	// NULL 포인터를 스택에 저장합니다 (argv[argc] = NULL). // "\0"을 통해 스트링이 끝났다는 것을 C standard가 알 수 있음.
+	*rsp -= sizeof(char *);
+	*(char **)(*rsp) = NULL;
+	// printf("Pushed NULL sentinel at %p\n", *rsp); /* Debug */
+
+	// 인자들의 주소를 스택에 저장합니다.
+	for (i = argc - 1; i >= 0; i--)
+	{
+		*rsp -= sizeof(char *);
+		*(char **)(*rsp) = arg_addresses[i];
+		// printf("Pushed argv[%d] address: %p\n", i, arg_addresses[i]); /* Debug */
+	}
+
+	// // argv (첫 번째 인자의 포인터)를 스택에 저장합니다.
+	// *rsp -= sizeof(char **);
+	// *(char ***)(*rsp) = (char **)(*rsp + sizeof(char **));
+	// // printf("Pushed argv pointer at %p\n", *rsp); /* Debug */
+
+	// // argc (인자의 개수)를 스택에 저장합니다.
+	// *rsp -= sizeof(int);
+	// *(int *)(*rsp) = argc;
+	// // printf("Pushed argc: %d at %p\n", argc, *rsp); /* Debug */
+
+	// 가짜 반환 주소를 스택에 저장합니다.
+	*rsp -= sizeof(void *);
+	*(void **)(*rsp) = NULL;
+	// printf("Pushed fake return address at %p\n", *rsp); /* Debug */
+
+	// printf("Finished argument_stack\n"); /* Debug */
+}
+
 /* Waits for thread TID to die and returns its exit status.  If
  * it was terminated by the kernel (i.e. killed due to an
  * exception), returns -1.  If TID is invalid or if it was not a
@@ -275,6 +415,20 @@ int process_wait(tid_t child_tid UNUSED)
 	}
 
 	return -1;
+	// struct thread *child = get_child_process(child_tid); // 자식 프로세스를 가져옵니다.
+	// if (child == NULL)									 // 자식 프로세스가 없으면 -1을 반환합니다.
+	// 	return -1;
+
+	// // 자식이 종료될 때까지 대기한다. (process_exit에서 자식이 종료될 때 sema_up 해줄 것이다.)
+	// // sema_down(&child->wait_sema);
+	// // 자식이 종료됨을 알리는 `wait_sema` signal을 받으면 현재 스레드(부모)의 자식 리스트에서 제거한다.
+	// // list_remove(&child->child_elem);
+	// // 자식이 완전히 종료되고 스케줄링이 이어질 수 있도록 자식에게 signal을 보낸다.
+	// // sema_up(&child->exit_sema);
+
+	// remove_child_process(child); // 자식 프로세스 메모리 해제
+
+	// return child->exit_status; // 자식의 exit_status를 반환한다.
 }
 
 /* Exit the process. This function is called by thread_exit (). */
@@ -285,6 +439,24 @@ void process_exit(void)
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
+
+	/* 수정 요망 */
+	/* 모든 파일 디스크립터를 닫습니다. */
+	for (int fd = 2; fd < MAX_FILES; fd++)
+	{
+		if (curr->fd_table[fd] != NULL)
+		{
+			file_close(curr->fd_table[fd]);
+			curr->fd_table[fd] = NULL;
+		}
+	}
+
+	// palloc_free_page(curr->fd_table);
+	// file_close(curr->run_file); // 현재 실행 중인 파일을 닫는다.
+
+	/* 부모에게 종료 상태를 알려줍니다. */
+	// sema_up(&curr->wait_sema); // 자식 스레드가 종료될 때 대기하고 있는 부모에게 signal을 보낸다.
+	// sema_down(&curr->exit_sema); // 자식 스레드가 완료되었음을 알리는 세마포어를 사용합니다. // 부모의 signal을 기다린다. 대기가 풀리고 나서 do_schedule(THREAD_DYING)이 이어져 다른 스레드가 실행된다.
 
 	process_cleanup();
 }
@@ -327,6 +499,49 @@ void process_activate(struct thread *next)
 
 	/* Set thread's kernel stack for use in processing interrupts. */
 	tss_update(next);
+}
+
+struct thread *get_child_process(int pid)
+{
+	/* 자식 리스트에 접근하여 프로세스 디스크립터 검색 */
+	struct thread *cur = thread_current();
+	struct list *child_list = &cur->child_list;
+	for (struct list_elem *e = list_begin(child_list); e != list_end(child_list); e = list_next(e))
+	{
+		struct thread *t = list_entry(e, struct thread, child_elem);
+		/* 해당 pid가 존재하면 프로세스 디스크립터 반환 */
+		if (t->tid == pid)
+		{
+			return t;
+		}
+	}
+	/* 리스트에 존재하지 않으면 NULL 리턴 */
+	return NULL;
+}
+
+void remove_child_process(struct thread *cp)
+{
+	/* 자식 리스트에서 제거*/
+	/* 프로세스 디스크립터 메모리 해제 */
+	// 현재 스레드의 자식 리스트를 가져옵니다.
+	struct thread *cur = thread_current();
+	struct list *child_list = &cur->child_list;
+
+	// 자식 리스트에서 cp를 찾습니다.
+	for (struct list_elem *e = list_begin(child_list); e != list_end(child_list); e = list_next(e))
+	{
+		struct thread *t = list_entry(e, struct thread, child_elem);
+		if (t == cp)
+		{
+			// 리스트에서 요소 제거
+			list_remove(e);
+
+			// 프로세스 디스크립터 메모리 해제
+			palloc_free_page(t); // or `free(t)` depending on how memory is allocated
+
+			return;
+		}
+	}
 }
 
 /* We load ELF binaries.  The following definitions are taken
@@ -484,12 +699,21 @@ load(const char *file_name, struct intr_frame *if_)
 		}
 	}
 
+	/* 수정 요망 */
+	/*
+	// // 현재 실행중인 파일은 수정할 수 없게 막는다.
+	// file_deny_write(file);
+	// // 스레드가 삭제될 때 파일을 닫을 수 있게 구조체에 파일을 저장해둔다.
+	// t->run_file = file;
+	*/
+
 	/* Set up stack. */
-	if (!setup_stack(if_))
+	if (!setup_stack(if_)) // user stack 초기화
 		goto done;
 
 	/* Start address. */
-	if_->rip = ehdr.e_entry;
+	if_->rip = ehdr.e_entry; // entry point 초기화
+							 // rip: 프로그램 카운터(실행할 다음 인스트럭션의 메모리  주소)
 
 	/* TODO: Your code goes here.
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
@@ -724,66 +948,3 @@ setup_stack(struct intr_frame *if_)
 	return success;
 }
 #endif /* VM */
-
-/**
- * @brief 프로그램 이름과 인자들을 유저 스택에 저장하는 함수
- *
- * @param argv 프로그램 이름과 인자가 저장된 메모리 공간의 포인터 배열
- * @param argc 인자의 개수
- * @param rsp 스택 포인터를 가리키는 주소
- */
-void argument_stack(char **argv, int argc, void **rsp)
-{
-	int i;
-	char *arg_addresses[argc];
-
-	// printf("Starting argument_stack\n"); /* Debug */
-	// printf("Initial rsp: %p\n", *rsp);	 /* Debug */
-
-	// 1. 데이터를 스택에 넣어준다. // 스택에 인자들을 저장합니다.
-	for (i = argc - 1; i >= 0; i--)
-	{
-		*rsp -= strlen(argv[i]) + 1;
-		memcpy(*rsp, argv[i], strlen(argv[i]) + 1);
-		arg_addresses[i] = *rsp;
-		// printf("Pushed argument %d: %s at %p\n", i, argv[i], *rsp); /* Debug */
-	}
-
-	// 2. 단어 정렬을 위해 8의 배수로 맞춰준다. // 스택 포인터를 8바이트 단위로 정렬합니다.
-	while ((uintptr_t)*rsp % 8 != 0)
-	{
-		*rsp -= 1;
-		*(uint8_t *)(*rsp) = 0;
-	}
-	// printf("Stack aligned to 8 bytes: %p\n", *rsp); /* Debug */
-
-	// NULL 포인터를 스택에 저장합니다 (argv[argc] = NULL). // "\0"을 통해 스트링이 끝났다는 것을 C standard가 알 수 있음.
-	*rsp -= sizeof(char *);
-	*(char **)(*rsp) = NULL;
-	// printf("Pushed NULL sentinel at %p\n", *rsp); /* Debug */
-
-	// 인자들의 주소를 스택에 저장합니다.
-	for (i = argc - 1; i >= 0; i--)
-	{
-		*rsp -= sizeof(char *);
-		*(char **)(*rsp) = arg_addresses[i];
-		// printf("Pushed argv[%d] address: %p\n", i, arg_addresses[i]); /* Debug */
-	}
-
-	// // argv (첫 번째 인자의 포인터)를 스택에 저장합니다.
-	// *rsp -= sizeof(char **);
-	// *(char ***)(*rsp) = (char **)(*rsp + sizeof(char **));
-	// // printf("Pushed argv pointer at %p\n", *rsp); /* Debug */
-
-	// // argc (인자의 개수)를 스택에 저장합니다.
-	// *rsp -= sizeof(int);
-	// *(int *)(*rsp) = argc;
-	// // printf("Pushed argc: %d at %p\n", argc, *rsp); /* Debug */
-
-	// 가짜 반환 주소를 스택에 저장합니다.
-	*rsp -= sizeof(void *);
-	*(void **)(*rsp) = NULL;
-	// printf("Pushed fake return address at %p\n", *rsp); /* Debug */
-
-	// printf("Finished argument_stack\n"); /* Debug */
-}

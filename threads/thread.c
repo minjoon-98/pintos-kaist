@@ -244,8 +244,7 @@ void thread_print_stats(void)
  * 제공된 코드는 새 스레드의 'priority'멤버를 PRIORITY로 설정하지만, 실제 우선 순위 스케줄링은 구현되지 않았다.
  * 우선순위 스케줄링은 문제 1-3의 목표이다.
  */
-tid_t thread_create(const char *name, int priority,
-					thread_func *function, void *aux)
+tid_t thread_create(const char *name, int priority, thread_func *function, void *aux)
 {
 	struct thread *t;
 	tid_t tid;
@@ -255,27 +254,42 @@ tid_t thread_create(const char *name, int priority,
 
 	/* Allocate thread. */
 	// 스레드 할당
-	t = palloc_get_page(PAL_ZERO);
+	t = palloc_get_page(PAL_ZERO); // 커널 공간을 위한 4KB의 싱글 페이지를 할당한다
 	if (t == NULL)
 		return TID_ERROR;
 
 	/* Initialize thread. */
 	// 스레드 초기화
-	init_thread(t, name, priority);
-	tid = t->tid = allocate_tid();
+	init_thread(t, name, priority); // 위에서 할당한 4KB의 단일 공간에 스레드 구조체를 초기화한다. (스레드 구조체의 크기는 64바이트 또는 128바이트가 된다.)
+	tid = t->tid = allocate_tid();	// 스레드의 고유한 ID를 할당한다.
 
 	/* Call the kernel_thread if it scheduled.
 	 * Note) rdi is 1st argument, and rsi is 2nd argument. */
 	// 스케줄된 경우 kernel_thread를 호출한다.
 	// 참고) rdi는 첫 번째 인자이며, rsi는 두 번째 인자이다.
 	t->tf.rip = (uintptr_t)kernel_thread;
-	t->tf.R.rdi = (uint64_t)function;
+	t->tf.R.rdi = (uint64_t)function; // 실행하려는 함수의 주소
 	t->tf.R.rsi = (uint64_t)aux;
 	t->tf.ds = SEL_KDSEG;
 	t->tf.es = SEL_KDSEG;
 	t->tf.ss = SEL_KDSEG;
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
+
+	/* 현재 스레드의 자식으로 추가 */
+	list_push_back(&thread_current()->child_list, &t->child_elem);
+
+	/* 파일 디스크립터 테이블 초기화 */
+	t->fd_table = palloc_get_page(PAL_ZERO);
+	if (t->fd_table == NULL)
+	{
+		palloc_free_page(t);
+		return TID_ERROR;
+	}
+
+	// t->fd_table[0] = 1; // stdin 자리: 1 배정
+	// t->fd_table[1] = 2; // stdout 자리: 2 배정
+	t->next_fd = 2; // 0과 1은 표준 입력/출력에 예약
 
 	/* Add to run queue. */
 	// 실행 대기열에 추가한다
@@ -401,15 +415,6 @@ void thread_exit(void)
 	 다른 프로세스를 실행 스케줄로 넘기는 것을 의미합니다.
 	 그리고 schedule_tail() 함수가 호출될 때 현재 스레드는 시스템에서 제거됩니다.
 	즉, 이 주석에 설명된 기능은 스레드가 종료 절차를 밟고 있으며 곧 시스템 자원을 반환하고 스스로를 해제할 것임을 나타냅니다.*/
-
-	/* 파일 디스크립터 테이블의 모든 파일을 닫습니다 */
-	for (int i = 2; i < MAX_FILES; i++)
-	{
-		if (thread_current()->fd_table[i] != NULL)
-		{
-			file_close(thread_current()->fd_table[i]);
-		}
-	}
 
 	intr_disable();
 	list_remove(&thread_current()->all_elem);
@@ -706,12 +711,22 @@ init_thread(struct thread *t, const char *name, int priority)
 	t->wait_on_lock = NULL;
 	list_init(&(t->donations));
 
-	/* 파일 디스크립터 테이블 초기화 */ /* project 2 system call */
-	for (int i = 0; i < MAX_FILES; i++)
-	{
-		t->fd_table[i] = NULL;
-	}
-	t->next_fd = 2; // 0과 1은 표준 입력/출력에 예약
+	// /* 파일 디스크립터 테이블 초기화 */ /* project 2 system call */
+	// for (int i = 0; i < MAX_FILES; i++)
+	// {
+	// 	t->fd_table[i] = NULL;
+	// }
+	// t->next_fd = 2; // 0과 1은 표준 입력/출력에 예약
+
+	/* project 2 system call */
+	list_init(&t->child_list);
+
+	sema_init(&t->load_sema, 0);
+	sema_init(&t->exit_sema, 0);
+	sema_init(&t->wait_sema, 0);
+
+	t->exit_status = 0;
+	// t->next_fd = 2;
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should

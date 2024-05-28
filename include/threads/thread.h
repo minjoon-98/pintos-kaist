@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/interrupt.h"
+#include "threads/synch.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -30,7 +31,12 @@ typedef int tid_t;
 
 #define MAX_NESTED_DEPTH 8 // 우선순위 기부의 최대 재귀 깊이
 
-#define MAX_FILES 128 // 스레드당 최대 열 수 있는 파일 수 /* project 2 system call */
+/* project 2 system call */
+#define MAX_FILES 128 /* 스레드당 최대 열 수 있는 파일 수 */
+// #define FDT_PAGES 3
+// #define FDT_COUNT_LIMIT FDT_PAGES * (1 << 9) // limit fdidx
+// #define FDT_PAGES 2
+// #define FDT_COUNT_LIMIT 128
 
 /*---------------------------mlfqs 매크로 함수-------------------------------*/
 /* threads/fixed-point.h */
@@ -149,8 +155,21 @@ struct thread
 	int recent_cpu;
 
 	/* project 2 system call */
-	struct file *fd_table[MAX_FILES]; // 파일 디스크립터 테이블
-	int next_fd;					  // 다음에 사용할 파일 디스크립터 번호
+	struct intr_frame parent_if; /* 부모 프로세스의 인터럽트 프레임 */ // _fork() 구현 때 사용, __do_fork() 함수
+	struct list child_list; /* 자식 리스트 */						   // _fork(), wait() 구현 때 사용
+	struct list_elem child_elem; /* 자식 리스트 element */			   // _fork(), _wait() 구현 때 사용
+
+	struct semaphore load_sema; // 현재 스레드가 load되는 동안 부모가 기다리게 하기 위한 semaphore
+	struct semaphore exit_sema;
+	struct semaphore wait_sema;
+
+	// struct file *run_file; // 현재 스레드의 실행중인 파일을 저장할 필드
+
+	// struct file *fd_table[MAX_FILES]; // 정적 할당
+	struct file **fd_table; // 파일 디스크립터 테이블을 위한 포인터
+	int next_fd;			// 다음에 사용할 파일 디스크립터 번호
+
+	int exit_status; /* 프로세스의 종료 상태 */ // _exit(), _wait() 구현 때 사용
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */

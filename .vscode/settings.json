@@ -21,7 +21,11 @@
         "stddef.h": "c",
         "vaddr.h": "c",
         "flags.h": "c",
-        "list.h": "c"
+        "list.h": "c",
+        "stdlib.h": "c",
+        "*.inc": "c",
+        "directory.h": "c",
+        "filesys.h": "c"
     },
     "editor.formatOnSave": true,
     "editor.formatOnPaste": true,

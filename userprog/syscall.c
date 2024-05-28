@@ -1,6 +1,8 @@
 #include "userprog/syscall.h"
 #include <stdio.h>
+#include <string.h>
 #include <syscall-nr.h>
+#include "lib/stdio.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/loader.h"
@@ -11,6 +13,7 @@
 #include "threads/init.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
+#include "threads/palloc.h"
 
 // #include "lib/user/syscall.h" /* makefile 에 이 경로가 포함이 안되어있어서 안되는 듯... makefile까지 건드는건 오바인거 같아서 이 방법은 폐기! */
 // 위 경로의 syscall은 유저와 커널 간 인터페이스! 따라서 따로 구현해야함!!!
@@ -21,14 +24,17 @@ void syscall_handler(struct intr_frame *);
 
 void check_address(void *addr);
 void get_argument(void *rsp, int *argv, int argc);
+// int add_file_descriptor(struct file *f);
+// struct file *get_file_from_fdt(int fd);
+// void remove_file_from_fdt(int fd);
 
 /* Projects 2 and later. */
 
 void halt(void);
 void exit(int status);
-// pid_t fork (const char *thread_name);
-// int exec (const char *cmd_line);
-// int wait (pid_t pid);
+// pid_t fork(const char *thread_name, struct intr_frame *f UNUSED);
+int exec(const char *cmd_line);
+// int wait(pid_t pid);
 bool create(const char *file, unsigned initial_size);
 bool remove(const char *file);
 int open(const char *file);
@@ -71,6 +77,19 @@ void syscall_handler(struct intr_frame *f UNUSED)
 	// TODO: Your implementation goes here.
 	// printf("system call!\n");
 
+	// hex_dump(f->rsp, f->rsp, USER_STACK, true); // 무슨 인자가 넘어오는지 궁금
+
+	/* from lib/user/syscall.c */
+	/*
+		인자 들어오는 순서:
+		1번째 인자: %rdi
+		2번째 인자: %rsi
+		3번째 인자: %rdx
+		4번째 인자: %r10
+		5번째 인자: %r8
+		6번째 인자: %r9
+	*/
+
 	// Getting the system call number from the interrupt frame /* %rax 는 시스템 콜 번호 */
 	int syscall_number = f->R.rax;
 
@@ -81,12 +100,15 @@ void syscall_handler(struct intr_frame *f UNUSED)
 	case SYS_EXIT: /* Terminate this process. */
 		exit((int)f->R.rdi);
 		break;
-		// case SYS_FORK: /* Clone current process. */
-		// 	fork();
-		// case SYS_EXEC: /* Switch current process. */
-		// 	exec();
-		// case SYS_WAIT: /* Wait for a child process to die. */
-		// 	wait();
+	// case SYS_FORK: /* Clone current process. */
+	// 	f->R.rax = fork((const char *)f->R.rdi, f);
+	// 	break;
+	case SYS_EXEC: /* Switch current process. */
+		f->R.rax = exec((const char *)f->R.rdi);
+		break;
+	// case SYS_WAIT: /* Wait for a child process to die. */
+	// 	f->R.rdi = wait((pid_t)f->R.rdi);
+	// 	break;
 	case SYS_CREATE: /* Create a file with the given name and initial size. */
 		f->R.rax = create((const char *)f->R.rdi, (unsigned)f->R.rsi);
 		break;
@@ -124,10 +146,11 @@ void syscall_handler(struct intr_frame *f UNUSED)
 /* Check if the address is in user space */
 void check_address(void *addr)
 {
-	/* 포인터가 가리키는 주소가 유저영역의 주소인지 확인 */
-	/* 잘못된 접근일 경우 프로세스 종료 */
-	if (addr == NULL || !is_user_vaddr(addr))
+	// 포인터가 가리키는 주소가 유저 영역의 주소인지 확인
+	// 주어진 주소가 현재 프로세스의 페이지 테이블에 유효하게 매핑되어 있는지 확인
+	if (addr == NULL || !is_user_vaddr(addr) || pml4_get_page(thread_current()->pml4, addr) == NULL)
 	{
+		// 잘못된 접근일 경우 프로세스 종료
 		exit(-1);
 	}
 }
@@ -142,6 +165,45 @@ void get_argument(void *rsp, int *argv, int argc)
 		argv[i] = *(int *)arg_ptr;
 	}
 }
+
+// // 파일 객체에 대한 파일 디스크립터를 생성하는 함수
+// int add_file_to_fdt(struct file *f)
+// {
+// 	struct thread *curr = thread_current();
+// 	struct file **fdt = curr->fd_table;
+
+// 	// limit을 넘지 않는 범위 안에서 빈 자리 탐색
+// 	while (curr->next_fd < MAX_FILES && fdt[curr->next_fd])
+// 		curr->next_fd++;
+// 	if (curr->next_fd >= MAX_FILES)
+// 		return -1;
+// 	fdt[curr->next_fd] = f;
+
+// 	return curr->next_fd;
+// }
+
+// // 파일 객체를 검색하는 함수
+// struct file *get_file_from_fdt(int fd)
+// {
+// 	if (fd < 0 || MAX_FILES <= fd)
+// 		return NULL;
+
+// 	struct thread *curr = thread_current();
+// 	struct file **fdt = curr->fd_table;
+
+// 	return fdt[fd]; /* 파일 디스크립터에 해당하는 파일 객체를 리턴 */
+// }
+
+// // 파일 디스크립터 테이블에서 파일 객체를 제거하는 함수
+// void remove_file_from_fdt(int fd)
+// {
+// 	if (fd < 0 || MAX_FILES <= fd)
+// 		return NULL;
+
+// 	struct thread *curr = thread_current();
+// 	struct file **fdt = curr->fd_table;
+// 	fdt[fd] = NULL;
+// }
 
 /**
  * This function calls power_off() to shut down Pintos.
@@ -174,9 +236,61 @@ void exit(int status)
 	/* 프로세스 종료 메시지 출력,
 	출력 양식: “프로세스이름: exit(종료상태)” */
 	/* 스레드 종료 */
-	struct thread *cur = thread_current();
-	printf("%s: exit(%d)\n", cur->name, status);
+	struct thread *curr = thread_current();
+	printf("%s: exit(%d)\n", curr->name, status); // Process Termination Message /* 정상적으로 종료됐다면 status는 0 */
 	thread_exit();
+}
+
+pid_t fork(const char *thread_name, struct intr_frame *f)
+{
+	return process_fork(thread_name, f);
+}
+
+/**
+ * @brief Executes a new process by running the command line specified.
+ * 지정된 명령어 줄을 실행하여 새로운 프로세스를 실행합니다.
+ *
+ * This function creates a new process by running the command line given in
+ * the `cmd_line` argument. It first checks the validity of the given address,
+ * then copies the command line to a new page of memory, and finally executes
+ * the new process.
+ * 이 함수는 `cmd_line` 인수로 주어진 명령어 줄을 실행하여 새로운 프로세스를 생성합니다.
+ * 먼저 주어진 주소의 유효성을 확인한 다음, 명령어 줄을 새로운 메모리 페이지에 복사하고,
+ * 마지막으로 새로운 프로세스를 실행합니다.
+ *
+ * @param cmd_line A pointer to the command line string that specifies the new
+ * process to be executed.
+ * 실행할 새로운 프로세스를 지정하는 명령어 줄 문자열에 대한 포인터
+ *
+ * @return This function does not return a value. If execution fails, it calls
+ * exit with a status of -1.
+ * 이 함수는 값을 반환하지 않습니다. 실행에 실패하면 상태 -1로 exit를 호출합니다.
+ */
+
+int exec(const char *cmd_line)
+{
+	// 주어진 명령어 줄 주소의 유효성을 확인합니다.
+	check_address(cmd_line);
+
+	// 명령어 줄 복사를 위한 새로운 메모리 페이지를 할당합니다.
+	char *cl_copy;
+	cl_copy = palloc_get_page(0);
+	if (cl_copy == NULL)
+		// 메모리 할당에 실패하면 상태 -1로 프로세스를 종료합니다.
+		exit(-1);
+
+	// 명령어 줄을 새로 할당한 메모리 페이지에 복사합니다.
+	strlcpy(cl_copy, cmd_line, PGSIZE);
+
+	// 복사된 명령어 줄을 사용하여 새로운 프로세스를 실행합니다.
+	// 실행에 실패하면 상태 -1로 프로세스를 종료합니다.
+	if (process_exec(cl_copy) == -1)
+		exit(-1);
+}
+
+int wait(int pid)
+{
+	return process_wait(pid);
 }
 
 /**
@@ -237,6 +351,10 @@ int open(const char *file)
 	int fd = thread_current()->next_fd++; // 다음 파일 디스크립터를 가져오고 증가시킵니다.
 	thread_current()->fd_table[fd] = f;	  // 파일 디스크립터 테이블에 파일 포인터를 저장합니다.
 	return fd;							  // 파일 디스크립터를 반환합니다.
+										  // int fd = add_file_to_fdt(file);
+										  // if (fd == -1)
+										  // 	file_close(file);
+										  // return fd;
 }
 
 /**
@@ -248,6 +366,7 @@ int open(const char *file)
 int filesize(int fd)
 {
 	struct file *f = thread_current()->fd_table[fd]; // 파일 디스크립터 테이블에서 파일 포인터를 가져옵니다.
+	// struct file *f = get_file_from_fdt(fd);
 	if (!f)
 	{
 		return -1; // 파일이 열려 있지 않은 경우 -1을 반환합니다.
@@ -347,4 +466,10 @@ void close(int fd)
 		file_close(f);						   // 파일을 닫습니다.
 		thread_current()->fd_table[fd] = NULL; // 파일 디스크립터 테이블에서 파일 포인터를 제거합니다.
 	}
+	// struct file *f = get_file_from_fdt(fd);
+	// if (f)
+	// {
+	// 	file_close(f);
+	// 	remove_file_from_fdt(fd);
+	// }
 }
