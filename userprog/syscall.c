@@ -14,10 +14,8 @@
 #include "filesys/filesys.h"
 #include "filesys/file.h"
 #include "threads/palloc.h"
-
-// #include "lib/user/syscall.h" /* makefile 에 이 경로가 포함이 안되어있어서 안되는 듯... makefile까지 건드는건 오바인거 같아서 이 방법은 폐기! */
-// 위 경로의 syscall은 유저와 커널 간 인터페이스! 따라서 따로 구현해야함!!!
-// syscall_handler가 실행하는거다
+#include "devices/input.h"
+#include "userprog/process.h"
 
 void syscall_entry(void);
 void syscall_handler(struct intr_frame *);
@@ -60,15 +58,15 @@ void close(int fd);
 
 void syscall_init(void)
 {
-	write_msr(MSR_STAR, ((uint64_t)SEL_UCSEG - 0x10) << 48 |
-							((uint64_t)SEL_KCSEG) << 32);
+	write_msr(MSR_STAR, ((uint64_t)SEL_UCSEG - 0x10) << 48 | ((uint64_t)SEL_KCSEG) << 32);
 	write_msr(MSR_LSTAR, (uint64_t)syscall_entry);
 
 	/* The interrupt service rountine should not serve any interrupts
 	 * until the syscall_entry swaps the userland stack to the kernel
 	 * mode stack. Therefore, we masked the FLAG_FL. */
-	write_msr(MSR_SYSCALL_MASK,
-			  FLAG_IF | FLAG_TF | FLAG_DF | FLAG_IOPL | FLAG_AC | FLAG_NT);
+	write_msr(MSR_SYSCALL_MASK, FLAG_IF | FLAG_TF | FLAG_DF | FLAG_IOPL | FLAG_AC | FLAG_NT);
+
+	lock_init(&filesys_lock);
 }
 
 /* The main system call interface */
@@ -100,15 +98,15 @@ void syscall_handler(struct intr_frame *f UNUSED)
 	case SYS_EXIT: /* Terminate this process. */
 		exit((int)f->R.rdi);
 		break;
-	// case SYS_FORK: /* Clone current process. */
-	// 	f->R.rax = fork((const char *)f->R.rdi, f);
-	// 	break;
+	case SYS_FORK: /* Clone current process. */
+		f->R.rax = fork((const char *)f->R.rdi, f);
+		break;
 	case SYS_EXEC: /* Switch current process. */
 		f->R.rax = exec((const char *)f->R.rdi);
 		break;
-	// case SYS_WAIT: /* Wait for a child process to die. */
-	// 	f->R.rdi = wait((pid_t)f->R.rdi);
-	// 	break;
+	case SYS_WAIT: /* Wait for a child process to die. */
+		f->R.rdi = wait((pid_t)f->R.rdi);
+		break;
 	case SYS_CREATE: /* Create a file with the given name and initial size. */
 		f->R.rax = create((const char *)f->R.rdi, (unsigned)f->R.rsi);
 		break;
@@ -166,44 +164,48 @@ void get_argument(void *rsp, int *argv, int argc)
 	}
 }
 
-// // 파일 객체에 대한 파일 디스크립터를 생성하는 함수
-// int add_file_to_fdt(struct file *f)
-// {
-// 	struct thread *curr = thread_current();
-// 	struct file **fdt = curr->fd_table;
+// 파일 객체에 대한 파일 디스크립터를 생성하는 함수
+int add_file_to_fdt(struct file *f)
+{
+	struct thread *curr = thread_current();
+	struct file **fdt = curr->fd_table;
 
-// 	// limit을 넘지 않는 범위 안에서 빈 자리 탐색
-// 	while (curr->next_fd < MAX_FILES && fdt[curr->next_fd])
-// 		curr->next_fd++;
-// 	if (curr->next_fd >= MAX_FILES)
-// 		return -1;
-// 	fdt[curr->next_fd] = f;
+	// limit을 넘지 않는 범위 안에서 빈 자리 탐색
+	while (curr->next_fd < MAX_FILES && fdt[curr->next_fd])
+	{
+		curr->next_fd++;
+	}
+	if (curr->next_fd >= MAX_FILES)
+	{
+		return -1;
+	}
+	fdt[curr->next_fd] = f;
 
-// 	return curr->next_fd;
-// }
+	return curr->next_fd;
+}
 
-// // 파일 객체를 검색하는 함수
-// struct file *get_file_from_fdt(int fd)
-// {
-// 	if (fd < 0 || MAX_FILES <= fd)
-// 		return NULL;
+// 파일 객체를 검색하는 함수
+struct file *get_file_from_fdt(int fd)
+{
+	if (fd < 0 || MAX_FILES <= fd)
+		return NULL;
 
-// 	struct thread *curr = thread_current();
-// 	struct file **fdt = curr->fd_table;
+	struct thread *curr = thread_current();
+	struct file **fdt = curr->fd_table;
 
-// 	return fdt[fd]; /* 파일 디스크립터에 해당하는 파일 객체를 리턴 */
-// }
+	return fdt[fd]; /* 파일 디스크립터에 해당하는 파일 객체를 리턴 */
+}
 
-// // 파일 디스크립터 테이블에서 파일 객체를 제거하는 함수
-// void remove_file_from_fdt(int fd)
-// {
-// 	if (fd < 0 || MAX_FILES <= fd)
-// 		return NULL;
+// 파일 디스크립터 테이블에서 파일 객체를 제거하는 함수
+void remove_file_from_fdt(int fd)
+{
+	if (fd < 0 || MAX_FILES <= fd)
+		return NULL;
 
-// 	struct thread *curr = thread_current();
-// 	struct file **fdt = curr->fd_table;
-// 	fdt[fd] = NULL;
-// }
+	struct thread *curr = thread_current();
+	struct file **fdt = curr->fd_table;
+	fdt[fd] = NULL;
+}
 
 /**
  * This function calls power_off() to shut down Pintos.
@@ -274,10 +276,13 @@ int exec(const char *cmd_line)
 
 	// 명령어 줄 복사를 위한 새로운 메모리 페이지를 할당합니다.
 	char *cl_copy;
-	cl_copy = palloc_get_page(0);
+	cl_copy = palloc_get_page(0); // page를 할당받고 해당 page에 file_name을 저장해줌
 	if (cl_copy == NULL)
+	{
 		// 메모리 할당에 실패하면 상태 -1로 프로세스를 종료합니다.
+		// palloc_free_page(cl_copy);
 		exit(-1);
+	}
 
 	// 명령어 줄을 새로 할당한 메모리 페이지에 복사합니다.
 	strlcpy(cl_copy, cmd_line, PGSIZE);
@@ -285,7 +290,9 @@ int exec(const char *cmd_line)
 	// 복사된 명령어 줄을 사용하여 새로운 프로세스를 실행합니다.
 	// 실행에 실패하면 상태 -1로 프로세스를 종료합니다.
 	if (process_exec(cl_copy) == -1)
+	{
 		exit(-1);
+	}
 }
 
 int wait(int pid)
@@ -342,19 +349,19 @@ bool remove(const char *file)
  */
 int open(const char *file)
 {
-	check_address((void *)file);		 // 주어진 파일 이름 주소가 유효한지 확인합니다.
+	check_address(file);				 // 주어진 파일 이름 주소가 유효한지 확인합니다.
 	struct file *f = filesys_open(file); // 파일 시스템에서 파일을 엽니다.
 	if (!f)
 	{
 		return -1; // 파일을 열 수 없는 경우 -1을 반환합니다.
 	}
-	int fd = thread_current()->next_fd++; // 다음 파일 디스크립터를 가져오고 증가시킵니다.
-	thread_current()->fd_table[fd] = f;	  // 파일 디스크립터 테이블에 파일 포인터를 저장합니다.
-	return fd;							  // 파일 디스크립터를 반환합니다.
-										  // int fd = add_file_to_fdt(file);
-										  // if (fd == -1)
-										  // 	file_close(file);
-										  // return fd;
+	// int fd = thread_current()->next_fd++; // 다음 파일 디스크립터를 가져오고 증가시킵니다.
+	// thread_current()->fd_table[fd] = f;	  // 파일 디스크립터 테이블에 파일 포인터를 저장합니다.
+	// return fd;							  // 파일 디스크립터를 반환합니다.
+	int fd = add_file_to_fdt(f);
+	if (fd == -1)
+		file_close(f);
+	return fd;
 }
 
 /**
@@ -365,8 +372,8 @@ int open(const char *file)
  */
 int filesize(int fd)
 {
-	struct file *f = thread_current()->fd_table[fd]; // 파일 디스크립터 테이블에서 파일 포인터를 가져옵니다.
-	// struct file *f = get_file_from_fdt(fd);
+	// struct file *f = thread_current()->fd_table[fd]; // 파일 디스크립터 테이블에서 파일 포인터를 가져옵니다.
+	struct file *f = get_file_from_fdt(fd);
 	if (!f)
 	{
 		return -1; // 파일이 열려 있지 않은 경우 -1을 반환합니다.
@@ -385,17 +392,38 @@ int filesize(int fd)
 int read(int fd, void *buffer, unsigned size)
 {
 	check_address(buffer); // 주어진 버퍼 주소가 유효한지 확인합니다.
+	off_t read_byte;
+	uint8_t *read_buffer = buffer;
 	if (fd == STDIN_FILENO)
 	{
-		// stdin에서 읽는 경우 처리
-		return -1; // 표준 입력에서 읽는 경우는 현재 지원하지 않으므로 -1을 반환합니다.
+		char key;
+		for (read_byte = 0; read_byte < size; read_byte++)
+		{
+			key = input_getc();
+			*read_buffer++ = key;
+			if (key == '\0')
+			{
+				break;
+			}
+		}
 	}
-	struct file *f = thread_current()->fd_table[fd]; // 파일 디스크립터 테이블에서 파일 포인터를 가져옵니다.
-	if (!f)
+	else if (fd == STDOUT_FILENO)
 	{
-		return -1; // 파일이 열려 있지 않은 경우 -1을 반환합니다.
+		return -1;
 	}
-	return file_read(f, buffer, size); // 파일에서 데이터를 읽고, 읽은 바이트 수를 반환합니다.
+	// struct file *f = thread_current()->fd_table[fd]; // 파일 디스크립터 테이블에서 파일 포인터를 가져옵니다.
+	else
+	{
+		struct file *f = get_file_from_fdt(fd);
+		if (!f)
+		{
+			return -1; // 파일이 열려 있지 않은 경우 -1을 반환합니다.
+		}
+		lock_acquire(&filesys_lock); // file을 읽을 때 다른 프로세스의 접근을 막기 위해 lock
+		read_byte = file_read(f, buffer, size);
+		lock_release(&filesys_lock);
+	}
+	return read_byte; // 파일에서 데이터를 읽고, 읽은 바이트 수를 반환합니다.
 }
 
 /**
@@ -409,17 +437,29 @@ int read(int fd, void *buffer, unsigned size)
 int write(int fd, const void *buffer, unsigned size)
 {
 	check_address((void *)buffer); // 주어진 버퍼 주소가 유효한지 확인합니다.
-	if (fd == STDOUT_FILENO)
+	off_t write_byte;
+	if (fd == STDIN_FILENO)
+	{
+		return -1;
+	}
+	else if (fd == STDOUT_FILENO)
 	{
 		putbuf(buffer, size); // 표준 출력에 데이터를 씁니다.
 		return size;		  // 쓴 바이트 수를 반환합니다.
 	}
-	struct file *f = thread_current()->fd_table[fd]; // 파일 디스크립터 테이블에서 파일 포인터를 가져옵니다.
-	if (!f)
+	else
 	{
-		return -1; // 파일이 열려 있지 않은 경우 -1을 반환합니다.
+		// struct file *f = thread_current()->fd_table[fd]; // 파일 디스크립터 테이블에서 파일 포인터를 가져옵니다.
+		struct file *f = get_file_from_fdt(fd);
+		if (!f)
+		{
+			return -1; // 파일이 열려 있지 않은 경우 -1을 반환합니다.
+		}
+		lock_acquire(&filesys_lock); // file을 읽을 때 다른 프로세스의 접근을 막기 위해 lock
+		write_byte = file_write(f, buffer, size);
+		lock_release(&filesys_lock);
 	}
-	return file_write(f, buffer, size); // 파일에 데이터를 쓰고, 쓴 바이트 수를 반환합니다.
+	return write_byte; // 파일에 데이터를 쓰고, 쓴 바이트 수를 반환합니다.
 }
 
 /**
@@ -430,9 +470,14 @@ int write(int fd, const void *buffer, unsigned size)
  */
 void seek(int fd, unsigned position)
 {
-	struct file *f = thread_current()->fd_table[fd]; // 파일 디스크립터 테이블에서 파일 포인터를 가져옵니다.
+	// struct file *f = thread_current()->fd_table[fd]; // 파일 디스크립터 테이블에서 파일 포인터를 가져옵니다.
+	struct file *f = get_file_from_fdt(fd);
 	if (f)
 	{
+		// if (f <= 2) // 0,1,2는 이미 정의되어 있음
+		// {
+		// 	return;
+		// }
 		file_seek(f, position); // 파일의 위치를 지정한 위치로 이동합니다.
 	}
 }
@@ -445,9 +490,14 @@ void seek(int fd, unsigned position)
  */
 unsigned tell(int fd)
 {
-	struct file *f = thread_current()->fd_table[fd]; // 파일 디스크립터 테이블에서 파일 포인터를 가져옵니다.
+	// struct file *f = thread_current()->fd_table[fd]; // 파일 디스크립터 테이블에서 파일 포인터를 가져옵니다.
+	struct file *f = get_file_from_fdt(fd);
 	if (f)
 	{
+		// if (f <= 2) // 0,1,2는 이미 정의되어 있음
+		// {
+		// 	return;
+		// }
 		return file_tell(f); // 파일의 현재 위치를 반환합니다.
 	}
 	return -1; // 파일이 열려 있지 않은 경우 -1을 반환합니다.
@@ -460,16 +510,16 @@ unsigned tell(int fd)
  */
 void close(int fd)
 {
-	struct file *f = thread_current()->fd_table[fd]; // 파일 디스크립터 테이블에서 파일 포인터를 가져옵니다.
+	// if (fd < 2 || MAX_FILES <= fd) // for write-bad-fd
+	// {
+	// 	return; /* Ignore stdin and stdout. */
+	// }
+	// struct file *f = thread_current()->fd_table[fd]; // 파일 디스크립터 테이블에서 파일 포인터를 가져옵니다.
+	struct file *f = get_file_from_fdt(fd);
 	if (f)
 	{
-		file_close(f);						   // 파일을 닫습니다.
-		thread_current()->fd_table[fd] = NULL; // 파일 디스크립터 테이블에서 파일 포인터를 제거합니다.
+		file_close(f); // 파일을 닫습니다.
+		// thread_current()->fd_table[fd] = NULL; // 파일 디스크립터 테이블에서 파일 포인터를 제거합니다.
+		remove_file_from_fdt(fd);
 	}
-	// struct file *f = get_file_from_fdt(fd);
-	// if (f)
-	// {
-	// 	file_close(f);
-	// 	remove_file_from_fdt(fd);
-	// }
 }

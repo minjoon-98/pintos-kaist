@@ -83,6 +83,7 @@ initd(void *f_name)
 #endif
 
 	process_init();
+	lock_init(&filesys_lock);
 
 	if (process_exec(f_name) < 0)
 		PANIC("Fail to launch initd\n");
@@ -93,33 +94,35 @@ initd(void *f_name)
  * TID_ERROR if the thread cannot be created. */
 tid_t process_fork(const char *name, struct intr_frame *if_ UNUSED)
 {
-	/* Clone current thread to new thread.*/
-	return thread_create(name,
-						 PRI_DEFAULT, __do_fork, thread_current());
+
 	// // /* Clone current thread to new thread.*/
 	// // return thread_create(name, PRI_DEFAULT, __do_fork, thread_current());
-	// /* project 2 system call */
-	// struct thread *parent = thread_current();
+	/* project 2 system call */
+	struct thread *parent = thread_current();
 
-	// /* Save the parent's intr_frame in a global variable */
-	// memcpy(&parent->parent_if, if_, sizeof(struct intr_frame)); // 부모 프로세스 메모리를 복사
+	/* Save the parent's intr_frame in a global variable */
+	memcpy(&parent->parent_if, if_, sizeof(struct intr_frame)); // 부모 프로세스 메모리를 복사
 
-	// tid_t child_tid = thread_create(name, PRI_DEFAULT, __do_fork, parent); // 전달받은 thread_name으로 __do_fork()를 진행
+	tid_t child_tid = thread_create(name, PRI_DEFAULT, __do_fork, parent); // 전달받은 thread_name으로 __do_fork()를 진행
 
-	// if (child_tid == TID_ERROR)
-	// {
-	// 	return TID_ERROR;
-	// }
+	if (child_tid == TID_ERROR)
+	{
+		return TID_ERROR;
+	}
 
-	// struct thread *child = get_child_process(child_tid);
-	// if (child == NULL)
-	// 	return TID_ERROR;
+	struct thread *child = get_child_process(child_tid);
+	if (child == NULL)
+		return TID_ERROR;
 
-	// /* Ensure parent waits for the child to successfully clone */
-	// // sema_down(&child->load_sema);
+	/* Ensure parent waits for the child to successfully clone */
+	sema_down(&child->load_sema);
 
-	// // if (child->exit_status == -1)
-	// // 	return TID_ERROR;
+	if (child->exit_status == -1)
+	{
+		return TID_ERROR;
+	}
+
+	/* 삭제 요망
 	// if (child->exit_status == -2)
 	// {
 	// 	// 자식이 완전히 종료되고 스케줄링이 이어질 수 있도록 자식에게 signal을 보낸다.
@@ -127,8 +130,9 @@ tid_t process_fork(const char *name, struct intr_frame *if_ UNUSED)
 	// 	// 자식 프로세스의 pid가 아닌 TID_ERROR를 반환한다.
 	// 	return TID_ERROR;
 	// }
+	*/
 
-	// return child_tid;
+	return child_tid;
 }
 
 #ifndef VM
@@ -155,25 +159,32 @@ duplicate_pte(uint64_t *pte, void *va, void *aux)
 
 	/* 1. TODO: If the parent_page is kernel page, then return immediately. */ /* 1. 부모의 페이지가 커널 페이지이면 즉시 반환 */
 	if (is_kernel_vaddr(va))
+	{
+		// return false ends pml4_for_each. which is undesirable - just return true to pass this kernel va
 		return true;
+	}
 	/* 2. Resolve VA from the parent's page map level 4. */ /* 2. 부모의 pml4에서 VA를 해석하여 페이지를 가져옵니다. */
 	parent_page = pml4_get_page(parent->pml4, va);
 	if (parent_page == NULL)
+	{
 		return false;
+	}
 
 	/* 3. TODO: Allocate new PAL_USER page for the child and set result to
 	 *    TODO: NEWPAGE. */
 	/* 3. 자식을 위해 새로운 PAL_USER 페이지를 할당하고 NEWPAGE에 설정합니다. */
 	newpage = palloc_get_page(PAL_USER | PAL_ZERO); // PAL_USER 플래그 : 사용자 페이지를 할당, PAL_ZERO 플래그 : 할당된 페이지를 0으로 초기화
 	if (newpage == NULL)
+	{
 		return false;
+	}
 
 	/* 4. TODO: Duplicate parent's page to the new page and
 	 *    TODO: check whether parent's page is writable or not (set WRITABLE
 	 *    TODO: according to the result). */
 	/* 4. 부모의 페이지를 새로운 페이지로 복사하고, 부모의 페이지가 쓰기 가능한지 확인합니다. */
 	memcpy(newpage, parent_page, PGSIZE);
-	writable = is_writable(pte);
+	writable = is_writable(pte); // pte는 parent_page를 가리키는 주소
 
 	/* 5. Add new page to child's page table at address VA with WRITABLE
 	 *    permission. */
@@ -212,7 +223,7 @@ __do_fork(void *aux)
 	if (current->pml4 == NULL)
 		goto error;
 
-	process_activate(current);
+	process_activate(current); // tss를 업데이트 해준다.
 #ifdef VM
 	supplemental_page_table_init(&current->spt);
 	if (!supplemental_page_table_copy(&current->spt, &parent->spt))
@@ -241,7 +252,7 @@ __do_fork(void *aux)
 	current->next_fd = parent->next_fd; // next_fd도 복제
 
 	// /* Notify parent that fork is successful */
-	// // sema_up(&current->load_sema); // 로드가 완료될 때까지 기다리고 있던 부모 대기 해제
+	sema_up(&current->load_sema); // 로드가 완료될 때까지 기다리고 있던 부모 대기 해제
 	process_init();
 
 	/* Finally, switch to the newly created process. */
@@ -249,9 +260,9 @@ __do_fork(void *aux)
 		do_iret(&if_);
 error:
 	current->exit_status = TID_ERROR;
-	thread_exit();
-	// sema_up(&current->load_sema);
-	// exit(-2);
+	sema_up(&current->load_sema);
+	exit(TID_ERROR);
+	// thread_exit();
 }
 
 /* Switch the current execution context to the f_name.
@@ -406,29 +417,33 @@ void argument_stack(char **argv, int argc, void **rsp)
  * does nothing. */
 int process_wait(tid_t child_tid UNUSED)
 {
-	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
-	 * XXX:       to add infinite loop here before
-	 * XXX:       implementing the process_wait. */
-	for (int i = 0; i < 1000000000; i++)
+	// /* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
+	//  * XXX:       to add infinite loop here before
+	//  * XXX:       implementing the process_wait. */
+	// for (int i = 0; i < 1000000000; i++)
+	// {
+	// 	/* code */
+	// }
+
+	// return -1;
+	struct thread *child = get_child_process(child_tid); // 자식 프로세스를 가져옵니다.
+	if (child == NULL)
 	{
-		/* code */
+		return -1; // 자식 프로세스가 없으면 -1을 반환합니다.
 	}
 
-	return -1;
-	// struct thread *child = get_child_process(child_tid); // 자식 프로세스를 가져옵니다.
-	// if (child == NULL)									 // 자식 프로세스가 없으면 -1을 반환합니다.
-	// 	return -1;
+	// 자식이 종료될 때까지 부모를 재운다. (process_exit에서 자식이 종료될 때 sema_up 해줄 것이다.)
+	sema_down(&child->wait_sema);
 
-	// // 자식이 종료될 때까지 대기한다. (process_exit에서 자식이 종료될 때 sema_up 해줄 것이다.)
-	// // sema_down(&child->wait_sema);
-	// // 자식이 종료됨을 알리는 `wait_sema` signal을 받으면 현재 스레드(부모)의 자식 리스트에서 제거한다.
-	// // list_remove(&child->child_elem);
-	// // 자식이 완전히 종료되고 스케줄링이 이어질 수 있도록 자식에게 signal을 보낸다.
-	// // sema_up(&child->exit_sema);
+	// 자식이 종료됨을 알리는 `wait_sema` signal을 받으면 -> 재운 부모가 깨어남
+	// 현재 스레드(부모)의 자식 리스트에서 제거한다.
+	list_remove(&child->child_elem);
+	// 자식이 완전히 종료되고 스케줄링이 이어질 수 있도록 자식에게 signal을 보낸다.
+	sema_up(&child->exit_sema);
 
-	// remove_child_process(child); // 자식 프로세스 메모리 해제
+	remove_child_process(child); // 자식 프로세스 메모리 해제
 
-	// return child->exit_status; // 자식의 exit_status를 반환한다.
+	return child->exit_status; // 자식의 exit_status를 반환한다.
 }
 
 /* Exit the process. This function is called by thread_exit (). */
@@ -451,14 +466,16 @@ void process_exit(void)
 		}
 	}
 
-	// palloc_free_page(curr->fd_table);
-	// file_close(curr->run_file); // 현재 실행 중인 파일을 닫는다.
+	palloc_free_page(curr->fd_table);
+	// palloc_free_multiple(curr->fd_table, 2); // for multi-oom(메모리 누수) fd 0,1 은 stdin, stdout
+
+	file_close(curr->run_file); // 현재 실행 중인 파일을 닫는다. // for rox- (실행중에 수정 못하도록)
 
 	/* 부모에게 종료 상태를 알려줍니다. */
-	// sema_up(&curr->wait_sema); // 자식 스레드가 종료될 때 대기하고 있는 부모에게 signal을 보낸다.
-	// sema_down(&curr->exit_sema); // 자식 스레드가 완료되었음을 알리는 세마포어를 사용합니다. // 부모의 signal을 기다린다. 대기가 풀리고 나서 do_schedule(THREAD_DYING)이 이어져 다른 스레드가 실행된다.
+	sema_up(&curr->wait_sema);	 // 자식 스레드가 종료될 때 대기하고 있는 부모에게 signal을 보낸다. // 종료되었다고 기다리고 있는 부모 thread에게 signal 보냄-> sema_up에서 val을 올려줌
+	sema_down(&curr->exit_sema); // 자식 스레드가 완료되었음을 알리는 세마포어를 사용합니다. // 부모의 signal을 기다린다. 대기가 풀리고 나서 do_schedule(THREAD_DYING)이 이어져 다른 스레드가 실행된다. // 부모의 exit_Status가 정확히 전달되었는지 확인(wait)
 
-	process_cleanup();
+	process_cleanup(); // pml4를 날림(이 함수를 call 한 thread의 pml4)
 }
 
 /* Free the current process's resources. */
@@ -699,13 +716,13 @@ load(const char *file_name, struct intr_frame *if_)
 		}
 	}
 
-	/* 수정 요망 */
-	/*
-	// // 현재 실행중인 파일은 수정할 수 없게 막는다.
-	// file_deny_write(file);
-	// // 스레드가 삭제될 때 파일을 닫을 수 있게 구조체에 파일을 저장해둔다.
-	// t->run_file = file;
-	*/
+	/* project 2 system call */
+	// 현재 실행중인 파일의 경우 write 할 수 없도록 설정
+
+	// 스레드가 삭제될 때 파일을 닫을 수 있게 구조체에 파일을 저장해둔다.
+	t->run_file = file;
+	// 현재 실행중인 파일은 수정할 수 없게 막는다. // for rox-simple
+	file_deny_write(file);
 
 	/* Set up stack. */
 	if (!setup_stack(if_)) // user stack 초기화
@@ -722,7 +739,7 @@ load(const char *file_name, struct intr_frame *if_)
 
 done:
 	/* We arrive here whether the load is successful or not. */
-	file_close(file);
+	// file_close(file); // load에서 file_close(file)을 해주면 file이 닫히면서 lock이 풀리게 된다. 따라서 load에서 닫지 말고 process_exit에서 닫아줌
 	return success;
 }
 

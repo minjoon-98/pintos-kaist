@@ -163,12 +163,11 @@ struct thread
 	struct semaphore exit_sema;
 	struct semaphore wait_sema;
 
-	// struct file *run_file; // 현재 스레드의 실행중인 파일을 저장할 필드
-
 	// struct file *fd_table[MAX_FILES]; // 정적 할당
 	struct file **fd_table; // 파일 디스크립터 테이블을 위한 포인터
 	int next_fd;			// 다음에 사용할 파일 디스크립터 번호
 
+	struct file *run_file;						// 현재 스레드의 실행중인 파일을 저장할 필드
 	int exit_status; /* 프로세스의 종료 상태 */ // _exit(), _wait() 구현 때 사용
 
 #ifdef USERPROG
