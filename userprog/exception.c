@@ -80,6 +80,7 @@ kill(struct intr_frame *f)
 
 	/* The interrupt frame's code segment value tells us where the
 	   exception originated. */
+	// thread_current()->exit_status = -1;
 	switch (f->cs)
 	{
 	case SEL_UCSEG:
@@ -160,5 +161,6 @@ page_fault(struct intr_frame *f)
 			   write ? "writing" : "reading",
 			   user ? "user" : "kernel");
 	}
+	exit(-1);
 	kill(f);
 }

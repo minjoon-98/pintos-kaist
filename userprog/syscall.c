@@ -239,6 +239,7 @@ void exit(int status)
 	출력 양식: “프로세스이름: exit(종료상태)” */
 	/* 스레드 종료 */
 	struct thread *curr = thread_current();
+	curr->exit_status = status;
 	printf("%s: exit(%d)\n", curr->name, status); // Process Termination Message /* 정상적으로 종료됐다면 status는 0 */
 	thread_exit();
 }

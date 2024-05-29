@@ -122,7 +122,7 @@ tid_t process_fork(const char *name, struct intr_frame *if_ UNUSED)
 		return TID_ERROR;
 	}
 
-	/* 삭제 요망
+	// /* 삭제 요망*/
 	// if (child->exit_status == -2)
 	// {
 	// 	// 자식이 완전히 종료되고 스케줄링이 이어질 수 있도록 자식에게 signal을 보낸다.
@@ -130,7 +130,6 @@ tid_t process_fork(const char *name, struct intr_frame *if_ UNUSED)
 	// 	// 자식 프로세스의 pid가 아닌 TID_ERROR를 반환한다.
 	// 	return TID_ERROR;
 	// }
-	*/
 
 	return child_tid;
 }
@@ -167,6 +166,7 @@ duplicate_pte(uint64_t *pte, void *va, void *aux)
 	parent_page = pml4_get_page(parent->pml4, va);
 	if (parent_page == NULL)
 	{
+		printf("Virtual address(%llx) is not assigned in parent thread's page table.\n", va);
 		return false;
 	}
 
@@ -176,6 +176,7 @@ duplicate_pte(uint64_t *pte, void *va, void *aux)
 	newpage = palloc_get_page(PAL_USER | PAL_ZERO); // PAL_USER 플래그 : 사용자 페이지를 할당, PAL_ZERO 플래그 : 할당된 페이지를 0으로 초기화
 	if (newpage == NULL)
 	{
+		printf("New page can't be allocated in a current thread.\n");
 		return false;
 	}
 
@@ -184,7 +185,8 @@ duplicate_pte(uint64_t *pte, void *va, void *aux)
 	 *    TODO: according to the result). */
 	/* 4. 부모의 페이지를 새로운 페이지로 복사하고, 부모의 페이지가 쓰기 가능한지 확인합니다. */
 	memcpy(newpage, parent_page, PGSIZE);
-	writable = is_writable(pte); // pte는 parent_page를 가리키는 주소
+	if (pte && (*pte & PTE_W))
+		writable = is_writable(pte); // pte는 parent_page를 가리키는 주소
 
 	/* 5. Add new page to child's page table at address VA with WRITABLE
 	 *    permission. */
@@ -193,7 +195,8 @@ duplicate_pte(uint64_t *pte, void *va, void *aux)
 	{
 		/* 6. TODO: if fail to insert page, do error handling. */
 		/* 6. 페이지 삽입에 실패하면 오류를 처리합니다. */
-		palloc_free_page(newpage);
+		// palloc_free_page(newpage);
+		printf("New page(%llx) isn't added to current thread's page table at va(%llx).\n", newpage, va);
 		return false;
 	}
 	return true;
@@ -434,8 +437,10 @@ int process_wait(tid_t child_tid UNUSED)
 
 	// 자식이 종료될 때까지 부모를 재운다. (process_exit에서 자식이 종료될 때 sema_up 해줄 것이다.)
 	sema_down(&child->wait_sema);
-
 	// 자식이 종료됨을 알리는 `wait_sema` signal을 받으면 -> 재운 부모가 깨어남
+	// 자식의 종료 상태를 가져온다.
+	int exit_status = child->exit_status;
+
 	// 현재 스레드(부모)의 자식 리스트에서 제거한다.
 	list_remove(&child->child_elem);
 	// 자식이 완전히 종료되고 스케줄링이 이어질 수 있도록 자식에게 signal을 보낸다.
@@ -443,19 +448,19 @@ int process_wait(tid_t child_tid UNUSED)
 
 	remove_child_process(child); // 자식 프로세스 메모리 해제
 
-	return child->exit_status; // 자식의 exit_status를 반환한다.
+	return exit_status; // 자식의 exit_status를 반환한다.
 }
 
 /* Exit the process. This function is called by thread_exit (). */
 void process_exit(void)
 {
 	struct thread *curr = thread_current();
+	struct list_elem *e;
 	/* TODO: Your code goes here.
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
 
-	/* 수정 요망 */
 	/* 모든 파일 디스크립터를 닫습니다. */
 	for (int fd = 2; fd < MAX_FILES; fd++)
 	{
@@ -470,12 +475,14 @@ void process_exit(void)
 	// palloc_free_multiple(curr->fd_table, 2); // for multi-oom(메모리 누수) fd 0,1 은 stdin, stdout
 
 	file_close(curr->run_file); // 현재 실행 중인 파일을 닫는다. // for rox- (실행중에 수정 못하도록)
+	curr->run_file = NULL;
 
 	/* 부모에게 종료 상태를 알려줍니다. */
-	sema_up(&curr->wait_sema);	 // 자식 스레드가 종료될 때 대기하고 있는 부모에게 signal을 보낸다. // 종료되었다고 기다리고 있는 부모 thread에게 signal 보냄-> sema_up에서 val을 올려줌
+	sema_up(&curr->wait_sema); // 자식 스레드가 종료될 때 대기하고 있는 부모에게 signal을 보낸다. // 종료되었다고 기다리고 있는 부모 thread에게 signal 보냄-> sema_up에서 val을 올려줌
+	// sema_up(&curr->load_sema);	 // ???
 	sema_down(&curr->exit_sema); // 자식 스레드가 완료되었음을 알리는 세마포어를 사용합니다. // 부모의 signal을 기다린다. 대기가 풀리고 나서 do_schedule(THREAD_DYING)이 이어져 다른 스레드가 실행된다. // 부모의 exit_Status가 정확히 전달되었는지 확인(wait)
 
-	process_cleanup(); // pml4를 날림(이 함수를 call 한 thread의 pml4)
+	process_cleanup(); // pml4를 해제(이 함수를 call 한 thread의 pml4)
 }
 
 /* Free the current process's resources. */
@@ -658,6 +665,12 @@ load(const char *file_name, struct intr_frame *if_)
 		goto done;
 	}
 
+	/* project 2 system call */
+	// 현재 실행중인 파일의 경우 write 할 수 없도록 설정 // for rox-simple
+	file_deny_write(file);
+	// 스레드가 삭제될 때 파일을 닫을 수 있게 구조체에 파일을 저장해둔다.
+	t->run_file = file;
+
 	/* Read program headers. */
 	file_ofs = ehdr.e_phoff;
 	for (i = 0; i < ehdr.e_phnum; i++)
@@ -715,14 +728,6 @@ load(const char *file_name, struct intr_frame *if_)
 			break;
 		}
 	}
-
-	/* project 2 system call */
-	// 현재 실행중인 파일의 경우 write 할 수 없도록 설정
-
-	// 스레드가 삭제될 때 파일을 닫을 수 있게 구조체에 파일을 저장해둔다.
-	t->run_file = file;
-	// 현재 실행중인 파일은 수정할 수 없게 막는다. // for rox-simple
-	file_deny_write(file);
 
 	/* Set up stack. */
 	if (!setup_stack(if_)) // user stack 초기화
