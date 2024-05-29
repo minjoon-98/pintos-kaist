@@ -431,8 +431,8 @@ int process_wait(tid_t child_tid UNUSED)
 	// {
 	// 	/* code */
 	// }
-
 	// return -1;
+
 	struct thread *child = get_child_process(child_tid); // 자식 프로세스를 가져옵니다.
 	if (child == NULL)
 	{

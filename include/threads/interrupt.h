@@ -40,30 +40,30 @@ struct intr_frame
 {
 	/* Pushed by intr_entry in intr-stubs.S.
 	   These are the interrupted task's saved registers. */
-	struct gp_registers R; // 인터럽트 발생 시 저장된 일반 레지스터들
+	struct gp_registers R; // 인터럽트 발생 시 저장된 일반 레지스터들 /* 스레드가 실행 중에 이용한 CPU의 범용 레지스터 값들 */
 
 	uint16_t es;	 // 세그먼트 레지스터 ES
 	uint16_t __pad1; // 정렬을 위한 패딩
 	uint32_t __pad2; // 정렬을 위한 패딩
-	uint16_t ds;	 // 세그먼트 레지스터 DS
+	uint16_t ds;	 // 세그먼트 레지스터 DS  /* 세그먼트 관리 */
 	uint16_t __pad3; // 정렬을 위한 패딩
 	uint32_t __pad4; // 정렬을 위한 패딩
 
 	/* Pushed by intrNN_stub in intr-stubs.S. */
-	uint64_t vec_no;	 // 인터럽트 벡터 번호 (어떤 인터럽트가 발생했는지를 나타냄)
-						 /* Sometimes pushed by the CPU,
-							otherwise for consistency pushed as 0 by intrNN_stub.
-							The CPU puts it just under `eip', but we move it here. */
-	uint64_t error_code; // 에러 코드 (특정 인터럽트에서 발생한 에러를 나타냄)
+	uint64_t vec_no; /* Interrupt vector number. */ // 인터럽트 벡터 번호 (어떤 인터럽트가 발생했는지를 나타냄)
+													/* Sometimes pushed by the CPU,
+													   otherwise for consistency pushed as 0 by intrNN_stub.
+													   The CPU puts it just under `eip', but we move it here. */
+	uint64_t error_code;							// 에러 코드 (특정 인터럽트에서 발생한 에러를 나타냄)
 
 	/* Pushed by the CPU.
 	   These are the interrupted task's saved registers. */
-	uintptr_t rip;	 // 다음에 실행할 명령어의 주소 (명령어 포인터)
-	uint16_t cs;	 // rip에 대한 코드 세그먼트
+	uintptr_t rip;	 // 다음에 실행할 명령어의 주소 (명령어 포인터) /* CPU의 레지스터 정보 */
+	uint16_t cs;	 // rip에 대한 코드 세그먼트 /* 세그먼트 관리 */
 	uint16_t __pad5; // 정렬을 위한 패딩
 	uint32_t __pad6; // 정렬을 위한 패딩
-	uint64_t eflags; // CPU 플래그 레지스터
-	uintptr_t rsp;	 // 저장된 스택 포인터
+	uint64_t eflags; // CPU 플래그 레지스터 /* CPU 상태를 나타내는 정보 */
+	uintptr_t rsp;	 // 저장된 스택 포인터 /* 스택 포인터, 스택의 어느 부분을 사용하고 있었는지에 대해 저장 */
 	uint16_t ss;	 // rsp에 대한 스택 세그먼트
 	uint16_t __pad7; // 정렬을 위한 패딩
 	uint32_t __pad8; // 정렬을 위한 패딩

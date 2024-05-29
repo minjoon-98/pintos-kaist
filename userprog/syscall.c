@@ -66,7 +66,7 @@ void syscall_init(void)
 	 * mode stack. Therefore, we masked the FLAG_FL. */
 	write_msr(MSR_SYSCALL_MASK, FLAG_IF | FLAG_TF | FLAG_DF | FLAG_IOPL | FLAG_AC | FLAG_NT);
 
-	lock_init(&filesys_lock);
+	lock_init(&filesys_lock); // to avoid race condition protect filesystem
 }
 
 /* The main system call interface */
@@ -134,6 +134,9 @@ void syscall_handler(struct intr_frame *f UNUSED)
 	case SYS_CLOSE: /* Close an open file. */
 		close((int)f->R.rdi);
 		break;
+	// case SYS_DUP2: /* 구현 실패... */
+	// 	dup2((int)f->R.rdi, (int)f->R.rsi);
+	// 	break;
 	default:
 		// 지원되지 않는 시스템 콜 처리
 		printf("Unknown system call: %d\n", syscall_number);
@@ -524,3 +527,39 @@ void close(int fd)
 		remove_file_from_fdt(fd);
 	}
 }
+
+// /**
+//  * @brief Duplicates an existing file descriptor to a new file descriptor.
+//  *
+//  * This function duplicates the file descriptor specified by oldfd to the file descriptor specified by newfd.
+//  *
+//  * @param oldfd The file descriptor to duplicate.
+//  * @param newfd The file descriptor to duplicate to.
+//  *
+//  * @return If successful, returns the new file descriptor.
+//  *         If oldfd is invalid or if an error occurs, returns -1.
+//  */
+// int dup2(int oldfd, int newfd)
+// {
+// 	struct file *old_file = find_file_by_fd(oldfd);
+// 	struct file *new_file = find_file_by_fd(newfd);
+
+// 	if (old_file == NULL)
+// 		return -1;
+// 	if (old_file == new_file)
+// 		return newfd;
+
+// 	if (old_file > 2)
+// 	{
+// 		close(newfd);
+// 		lock_acquire(&filesys_lock);
+// 		thread_current()->fd_table[newfd] = file_duplicate(old_file);
+// 		lock_release(&filesys_lock);
+// 	}
+// 	else
+// 	{
+// 		close(newfd);
+// 		thread_current()->fd_table[newfd] = old_file;
+// 	}
+// 	return newfd;
+// }

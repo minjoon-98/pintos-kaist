@@ -287,9 +287,9 @@ tid_t thread_create(const char *name, int priority, thread_func *function, void 
 		return TID_ERROR;
 	}
 
-	// t->fd_table[0] = 1; // stdin 자리: 1 배정
-	// t->fd_table[1] = 2; // stdout 자리: 2 배정
-	t->next_fd = 2; // 0과 1은 표준 입력/출력에 예약
+	t->fd_table[0] = 1; // stdin 자리: 1 배정
+	t->fd_table[1] = 2; // stdout 자리: 2 배정
+	t->next_fd = 2;		// 0과 1은 표준 입력/출력에 예약
 
 	/* Add to run queue. */
 	// 실행 대기열에 추가한다
