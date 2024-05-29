@@ -105,7 +105,7 @@ void syscall_handler(struct intr_frame *f UNUSED)
 		f->R.rax = exec((const char *)f->R.rdi);
 		break;
 	case SYS_WAIT: /* Wait for a child process to die. */
-		f->R.rdi = wait((pid_t)f->R.rdi);
+		f->R.rax = wait((pid_t)f->R.rdi);
 		break;
 	case SYS_CREATE: /* Create a file with the given name and initial size. */
 		f->R.rax = create((const char *)f->R.rdi, (unsigned)f->R.rsi);
@@ -511,10 +511,10 @@ unsigned tell(int fd)
  */
 void close(int fd)
 {
-	// if (fd < 2 || MAX_FILES <= fd) // for write-bad-fd
-	// {
-	// 	return; /* Ignore stdin and stdout. */
-	// }
+	if (fd < 2 || MAX_FILES <= fd) // for write-bad-fd
+	{
+		return; /* Ignore stdin and stdout. */
+	}
 	// struct file *f = thread_current()->fd_table[fd]; // 파일 디스크립터 테이블에서 파일 포인터를 가져옵니다.
 	struct file *f = get_file_from_fdt(fd);
 	if (f)

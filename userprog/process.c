@@ -185,8 +185,8 @@ duplicate_pte(uint64_t *pte, void *va, void *aux)
 	 *    TODO: according to the result). */
 	/* 4. 부모의 페이지를 새로운 페이지로 복사하고, 부모의 페이지가 쓰기 가능한지 확인합니다. */
 	memcpy(newpage, parent_page, PGSIZE);
-	if (pte && (*pte & PTE_W))
-		writable = is_writable(pte); // pte는 parent_page를 가리키는 주소
+	// if (pte && (*pte & PTE_W))
+	writable = is_writable(pte); // pte는 parent_page를 가리키는 주소
 
 	/* 5. Add new page to child's page table at address VA with WRITABLE
 	 *    permission. */
@@ -243,7 +243,7 @@ __do_fork(void *aux)
 	 * TODO:       the resources of parent.*/
 
 	/* Duplicate file descriptors */ /* 파일 디스크립터 복제 */
-	for (int fd = 0; fd < MAX_FILES; fd++)
+	for (int fd = 2; fd < MAX_FILES; fd++)
 	{
 		if (parent->fd_table[fd] != NULL)
 		{
@@ -440,15 +440,13 @@ int process_wait(tid_t child_tid UNUSED)
 	// 자식이 종료됨을 알리는 `wait_sema` signal을 받으면 -> 재운 부모가 깨어남
 	// 자식의 종료 상태를 가져온다.
 	int exit_status = child->exit_status;
-
 	// 현재 스레드(부모)의 자식 리스트에서 제거한다.
 	list_remove(&child->child_elem);
 	// 자식이 완전히 종료되고 스케줄링이 이어질 수 있도록 자식에게 signal을 보낸다.
 	sema_up(&child->exit_sema);
 
 	remove_child_process(child); // 자식 프로세스 메모리 해제
-
-	return exit_status; // 자식의 exit_status를 반환한다.
+	return exit_status;			 // 자식의 exit_status를 반환한다.
 }
 
 /* Exit the process. This function is called by thread_exit (). */
@@ -476,7 +474,6 @@ void process_exit(void)
 
 	file_close(curr->run_file); // 현재 실행 중인 파일을 닫는다. // for rox- (실행중에 수정 못하도록)
 	curr->run_file = NULL;
-
 	/* 부모에게 종료 상태를 알려줍니다. */
 	sema_up(&curr->wait_sema); // 자식 스레드가 종료될 때 대기하고 있는 부모에게 signal을 보낸다. // 종료되었다고 기다리고 있는 부모 thread에게 signal 보냄-> sema_up에서 val을 올려줌
 	// sema_up(&curr->load_sema);	 // ???
