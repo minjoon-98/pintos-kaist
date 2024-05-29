@@ -155,7 +155,6 @@ struct thread
 	int recent_cpu;
 
 	/* project 2 system call */
-	struct thread *parent;
 	struct intr_frame parent_if; /* 부모 프로세스의 인터럽트 프레임 */ // _fork() 구현 때 사용, __do_fork() 함수
 	struct list child_list; /* 자식 리스트 */						   // _fork(), wait() 구현 때 사용
 	struct list_elem child_elem; /* 자식 리스트 element */			   // _fork(), _wait() 구현 때 사용

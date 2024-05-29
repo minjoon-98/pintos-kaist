@@ -30,9 +30,9 @@ void get_argument(void *rsp, int *argv, int argc);
 
 void halt(void);
 void exit(int status);
-// pid_t fork(const char *thread_name, struct intr_frame *f UNUSED);
+pid_t fork(const char *thread_name, struct intr_frame *f UNUSED);
 int exec(const char *cmd_line);
-// int wait(pid_t pid);
+int wait(pid_t pid);
 bool create(const char *file, unsigned initial_size);
 bool remove(const char *file);
 int open(const char *file);

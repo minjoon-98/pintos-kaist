@@ -195,8 +195,8 @@ duplicate_pte(uint64_t *pte, void *va, void *aux)
 	{
 		/* 6. TODO: if fail to insert page, do error handling. */
 		/* 6. 페이지 삽입에 실패하면 오류를 처리합니다. */
-		// palloc_free_page(newpage);
-		printf("New page(%llx) isn't added to current thread's page table at va(%llx).\n", newpage, va);
+		// printf("Failed to add new page(%p) to current thread's page table at va(%p).\n", newpage, va); // (multi-oom) 이 메세지가 뜨기는 하는데 주석 처리하면 테스트 통과는 함
+		palloc_free_page(newpage);
 		return false;
 	}
 	return true;
@@ -236,6 +236,7 @@ __do_fork(void *aux)
 		goto error;
 #endif
 
+	enum intr_level old_level = intr_disable();
 	/* TODO: Your code goes here.
 	 * TODO: Hint) To duplicate the file object, use `file_duplicate`
 	 * TODO:       in include/filesys/file.h. Note that parent should not return
@@ -255,7 +256,10 @@ __do_fork(void *aux)
 	current->next_fd = parent->next_fd; // next_fd도 복제
 
 	// /* Notify parent that fork is successful */
-	sema_up(&current->load_sema); // 로드가 완료될 때까지 기다리고 있던 부모 대기 해제
+	sema_up(&current->load_sema); // Notify parent that fork is successful // 로드가 완료될 때까지 기다리고 있던 부모 대기 해제
+
+	intr_set_level(old_level);
+
 	process_init();
 
 	/* Finally, switch to the newly created process. */
@@ -453,13 +457,13 @@ int process_wait(tid_t child_tid UNUSED)
 void process_exit(void)
 {
 	struct thread *curr = thread_current();
-	struct list_elem *e;
+
 	/* TODO: Your code goes here.
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
 
-	/* 모든 파일 디스크립터를 닫습니다. */
+	// Close all open file descriptors. /* 모든 파일 디스크립터를 닫습니다. */
 	for (int fd = 2; fd < MAX_FILES; fd++)
 	{
 		if (curr->fd_table[fd] != NULL)
@@ -472,13 +476,22 @@ void process_exit(void)
 	palloc_free_page(curr->fd_table);
 	// palloc_free_multiple(curr->fd_table, 2); // for multi-oom(메모리 누수) fd 0,1 은 stdin, stdout
 
-	file_close(curr->run_file); // 현재 실행 중인 파일을 닫는다. // for rox- (실행중에 수정 못하도록)
-	curr->run_file = NULL;
-	/* 부모에게 종료 상태를 알려줍니다. */
+	// Close the running file.
+	if (curr->run_file != NULL)
+	{
+		file_close(curr->run_file);
+		curr->run_file = NULL;
+	}
+	// file_close(curr->run_file); // 현재 실행 중인 파일을 닫는다. // for rox- (실행중에 수정 못하도록)
+	// curr->run_file = NULL;
+
+	// Notify parent that we are exiting. /* 부모에게 종료 상태를 알려줍니다. */
 	sema_up(&curr->wait_sema); // 자식 스레드가 종료될 때 대기하고 있는 부모에게 signal을 보낸다. // 종료되었다고 기다리고 있는 부모 thread에게 signal 보냄-> sema_up에서 val을 올려줌
-	// sema_up(&curr->load_sema);	 // ???
+
+	// Wait for parent to acknowledge exit.
 	sema_down(&curr->exit_sema); // 자식 스레드가 완료되었음을 알리는 세마포어를 사용합니다. // 부모의 signal을 기다린다. 대기가 풀리고 나서 do_schedule(THREAD_DYING)이 이어져 다른 스레드가 실행된다. // 부모의 exit_Status가 정확히 전달되었는지 확인(wait)
 
+	// Clean up process resources.
 	process_cleanup(); // pml4를 해제(이 함수를 call 한 thread의 pml4)
 }
 
