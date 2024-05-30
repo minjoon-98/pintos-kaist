@@ -83,7 +83,8 @@ initd(void *f_name)
 #endif
 
 	process_init();
-	lock_init(&filesys_lock);
+
+	lock_init(&filesys_lock); // init lock to avoid race condition protect filesystem
 
 	if (process_exec(f_name) < 0)
 		PANIC("Fail to launch initd\n");
