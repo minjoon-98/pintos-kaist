@@ -12,6 +12,7 @@
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "intrinsic.h"
+#include "vm/vm.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -727,6 +728,8 @@ init_thread(struct thread *t, const char *name, int priority)
 
 	t->exit_status = 0;
 	t->next_fd = 2;
+
+	/* project 3 VM */
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
