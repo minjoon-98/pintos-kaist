@@ -79,7 +79,7 @@ static void
 initd(void *f_name)
 {
 #ifdef VM
-	supplemental_page_table_init(&thread_current()->spt);
+	supplemental_page_table_init(&thread_current()->spt); /* 해시테이블 초기화 */
 #endif
 
 	process_init();
