@@ -425,6 +425,6 @@ remove_elem(struct hash *h, struct hash_elem *e)
 
 static uint64_t spt_hash_func(const struct hash_elem *e, void *aux)
 {
-	struct supplemetal_page_table_entry *spte = hash_entry(e, struct supplemetal_page_table_entry, spt_hash_elem);
-	return hash_int(spte->user_vaddr);
+	struct page *page = hash_entry(e, struct page, hash_elem);
+	return hash_int(page->va);
 }

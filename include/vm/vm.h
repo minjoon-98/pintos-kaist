@@ -48,7 +48,8 @@ struct page
 	struct frame *frame; /* Back reference for frame */
 
 	/* Your implementation */
-
+	struct hash_elem hash_elem;
+	bool is_loaded;
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
 	union
@@ -93,16 +94,6 @@ struct page_operations
 struct supplemental_page_table
 {
 	struct hash spt_hash;
-};
-
-struct supplemetal_page_table_entry
-{
-	struct hash_elem spt_hash_elem;
-
-	void *user_vaddr;
-	bool is_loaded;
-	struct frame *frame;
-	struct page *page;
 };
 
 bool page_table_entry_less_function(struct hash_elem *a, struct hash_elem *b, void *aux);

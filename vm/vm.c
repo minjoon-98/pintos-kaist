@@ -4,6 +4,7 @@
 #include "vm/vm.h"
 #include "vm/inspect.h"
 #include "kernel/hash.h"
+#include "threads/vaddr.h"
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -68,16 +69,29 @@ err:
 struct page *
 spt_find_page(struct supplemental_page_table *spt UNUSED, void *va UNUSED)
 {
+	uint64_t page_bound = pg_round_down(va);
+	struct page temp_page;
+	struct hash_elem *found_elem;
+
+	temp_page.va = page_bound;
+
+	found_elem = hash_find(&spt->spt_hash, &temp_page.hash_elem);
+
+	if (found_elem != NULL)
+	{
+		struct page *found_page = hash_entry(found_elem, struct page, hash_elem);
+		return found_page;
+	}
 	struct page *page = NULL;
 }
-
 /* Insert PAGE into spt with validation. */
 bool spt_insert_page(struct supplemental_page_table *spt UNUSED,
 					 struct page *page UNUSED)
 {
-	int succ = false;
-	/* TODO: Fill this function. */
-
+	// unchecked: 페이지 존재할 시, return 결정 안됨
+	if (hash_find(&spt->spt_hash, &page->hash_elem) != NULL)
+		return false;
+	int succ = hash_insert(&spt->spt_hash, &page->hash_elem) != NULL;
 	return succ;
 }
 
@@ -201,7 +215,7 @@ void supplemental_page_table_kill(struct supplemental_page_table *spt UNUSED)
 
 bool page_table_entry_less_function(struct hash_elem *a, struct hash_elem *b, void *aux UNUSED)
 {
-	struct supplemetal_page_table_entry *spte_a = hash_entry(a, struct supplemetal_page_table_entry, spt_hash_elem);
-	struct supplemetal_page_table_entry *spte_b = hash_entry(b, struct supplemetal_page_table_entry, spt_hash_elem);
-	return spte_a->user_vaddr < spte_b->user_vaddr;
+	struct page *page_a = hash_entry(a, struct page, hash_elem);
+	struct page *page_b = hash_entry(b, struct page, hash_elem);
+	return page_a->va < page_b->va;
 }
