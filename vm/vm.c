@@ -5,6 +5,7 @@
 #include "vm/inspect.h"
 #include "kernel/hash.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -132,6 +133,15 @@ vm_get_frame(void)
 	struct frame *frame = NULL;
 	/* TODO: Fill this function. */
 
+	// unchecked : zero 초기화 해야하는지 몰?루
+	void *addr = palloc_get_page(PAL_USER);
+	if (addr == NULL)
+		PANIC("todo");
+
+	frame = malloc(sizeof(struct frame));
+
+	frame->kva = addr;
+
 	ASSERT(frame != NULL);
 	ASSERT(frame->page == NULL);
 	return frame;
@@ -174,7 +184,9 @@ bool vm_claim_page(void *va UNUSED)
 {
 	struct page *page = NULL;
 	/* TODO: Fill this function */
-
+	page = spt_find_page(&thread_current()->spt, va);
+	if (page == NULL)
+		return false;
 	return vm_do_claim_page(page);
 }
 
@@ -189,6 +201,8 @@ vm_do_claim_page(struct page *page)
 	page->frame = frame;
 
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
+	struct thread *cur_t = thread_current();
+	pml4_set_page(cur_t->pml4, page->va, frame->kva, page->writable);
 
 	return swap_in(page, frame->kva);
 }

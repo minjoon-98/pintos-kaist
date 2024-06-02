@@ -50,6 +50,7 @@ struct page
 	/* Your implementation */
 	struct hash_elem hash_elem;
 	bool is_loaded;
+	bool writable;
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
 	union
@@ -66,6 +67,7 @@ struct page
 /* The representation of "frame" */
 struct frame
 {
+	// unchecked :멤버번수 추가
 	void *kva;
 	struct page *page;
 };
