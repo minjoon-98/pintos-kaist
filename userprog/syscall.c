@@ -43,6 +43,9 @@ void seek(int fd, unsigned position);
 unsigned tell(int fd);
 void close(int fd);
 
+/* project 3*/
+void *mmap(void *addr, size_t length, int writable, int fd, off_t offset);
+
 /* System call.
  *
  * Previously system call services was handled by the interrupt handler

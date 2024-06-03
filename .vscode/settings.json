@@ -28,7 +28,10 @@
         "filesys.h": "c",
         "timer.h": "c",
         "gdt.h": "c",
-        "stdbool.h": "c"
+        "stdbool.h": "c",
+        "page_cache.h": "c",
+        "palloc.h": "c",
+        "hash.h": "c"
     },
     "editor.formatOnSave": true,
     "editor.formatOnPaste": true,

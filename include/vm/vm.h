@@ -1,6 +1,7 @@
 #ifndef VM_VM_H
 #define VM_VM_H
 #include <stdbool.h>
+#include "kernel/list.h"
 #include "threads/palloc.h"
 #include "kernel/hash.h"
 enum vm_type
@@ -48,7 +49,20 @@ struct page
 	struct frame *frame; /* Back reference for frame */
 
 	/* Your implementation */
+	struct file *file_vnode;
+
+	uint8_t type;
+
+	size_t offset;
+
+	size_t read_bytes;
+	size_t zero_bytes;
+
+	size_t swap_slot;
+
+	struct list_elem mmap_elem;
 	struct hash_elem hash_elem;
+
 	bool is_loaded;
 	bool writable;
 	/* Per-type data are binded into the union.
@@ -62,6 +76,14 @@ struct page
 		struct page_cache page_cache;
 #endif
 	};
+};
+
+struct page_info_transmitter
+{
+	struct file *file;
+	off_t ofs;
+	uint32_t read_bytes;
+	uint32_t zero_bytes;
 };
 
 /* The representation of "frame" */

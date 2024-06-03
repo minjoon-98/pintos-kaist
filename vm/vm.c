@@ -59,8 +59,24 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage, bool writabl
 		/* TODO: Create the page, fetch the initialier according to the VM type,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
+		struct page *page = malloc(sizeof(struct page));
+		if (page == NULL)
+			goto err;
+
+		// unchecked : uninit_new 의 마지막인자로 완전한 initializer의 호출을 넣어줘야하는지 몰?루
+		if (VM_TYPE(type) == VM_ANON)
+			uninit_new(page, upage, init, type, aux, anon_initializer);
+		if (VM_TYPE(type) == VM_FILE)
+			uninit_new(page, upage, init, type, aux, file_backed_initializer);
+		page->writable = writable;
 
 		/* TODO: Insert the page into the spt. */
+		if (hash_insert(&spt->spt_hash, &page->hash_elem) == NULL)
+		{
+			free(page);
+			goto err;
+		}
+		return true;
 	}
 err:
 	return false;

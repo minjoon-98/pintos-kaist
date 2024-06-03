@@ -18,6 +18,7 @@
 #include "threads/mmu.h"
 #include "threads/vaddr.h"
 #include "intrinsic.h"
+#include "threads/malloc.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -920,6 +921,13 @@ lazy_load_segment(struct page *page, void *aux)
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
+	struct page_info_transmitter *info = (struct page_info_transmitter *)aux;
+
+	if (file_read_at(info->file, page->va, info->read_bytes, info->ofs) != (int)info->read_bytes)
+		return false;
+	memset(page->va + info->read_bytes, 0, info->zero_bytes);
+
+	return true;
 }
 
 /* Loads a segment starting at offset OFS in FILE at address
@@ -954,14 +962,27 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
 		void *aux = NULL;
+		aux = malloc(sizeof(struct page_info_transmitter));
+		if (aux == NULL)
+			return false;
+
+		((struct page_info_transmitter *)aux)->file = file;
+		((struct page_info_transmitter *)aux)->ofs = ofs;
+		((struct page_info_transmitter *)aux)->read_bytes = page_read_bytes;
+		((struct page_info_transmitter *)aux)->zero_bytes = page_zero_bytes;
+
 		if (!vm_alloc_page_with_initializer(VM_ANON, upage,
 											writable, lazy_load_segment, aux))
+		{
+			free((struct page_info_transmitter *)aux);
 			return false;
+		}
 
 		/* Advance. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
+		ofs += page_read_bytes;
 	}
 	return true;
 }
