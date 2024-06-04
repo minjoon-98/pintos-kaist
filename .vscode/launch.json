@@ -1,0 +1,14 @@
+{
+    "configurations": [
+        {
+            "type": "gdb",
+            "request": "attach",
+            "name": "Attach to gdbserver : threads",
+            "executable": "/home/minjoon/pintos-kaist/threads/build/kernel.o",
+            "target": "localhost:1234",
+            "remote": true,
+            "cwd": "/home/minjoon/pintos-kaist",
+            "valuesFormatting": "parseText"
+        }
+    ]
+}
