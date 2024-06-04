@@ -49,16 +49,16 @@ struct page
 	struct frame *frame; /* Back reference for frame */
 
 	/* Your implementation */
-	struct file *file_vnode;
+	// struct file *file_vnode;
 
 	uint8_t type;
 
-	size_t offset;
+	// size_t offset;
 
-	size_t read_bytes;
-	size_t zero_bytes;
+	// size_t read_bytes;
+	// size_t zero_bytes;
 
-	size_t swap_slot;
+	// size_t swap_slot;
 
 	struct list_elem mmap_elem;
 	struct hash_elem hash_elem;
@@ -145,5 +145,4 @@ bool vm_claim_page(void *va);
 enum vm_type page_get_type(struct page *page);
 
 // 작성 함수
-
 #endif /* VM_VM_H */

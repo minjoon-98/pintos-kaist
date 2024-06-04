@@ -62,16 +62,16 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage, bool writabl
 		struct page *page = malloc(sizeof(struct page));
 		if (page == NULL)
 			goto err;
-
+		// printf("page type = %d", type);
+		// printf("logical addr = %p\n", upage);
 		// unchecked : uninit_new 의 마지막인자로 완전한 initializer의 호출을 넣어줘야하는지 몰?루
 		if (VM_TYPE(type) == VM_ANON)
 			uninit_new(page, upage, init, type, aux, anon_initializer);
 		if (VM_TYPE(type) == VM_FILE)
 			uninit_new(page, upage, init, type, aux, file_backed_initializer);
 		page->writable = writable;
-
 		/* TODO: Insert the page into the spt. */
-		if (hash_insert(&spt->spt_hash, &page->hash_elem) == NULL)
+		if (spt_insert_page(spt, page) == false)
 		{
 			free(page);
 			goto err;
@@ -83,32 +83,26 @@ err:
 }
 
 /* Find VA from spt and return page. On error, return NULL. */
-struct page *
-spt_find_page(struct supplemental_page_table *spt UNUSED, void *va UNUSED)
+struct page *spt_find_page(struct supplemental_page_table *spt, void *va)
 {
-	uint64_t page_bound = pg_round_down(va);
-	struct page temp_page;
+	struct page *page;
 	struct hash_elem *found_elem;
+	page = (struct page *)malloc(sizeof(struct page));
+	page->va = va;
 
-	temp_page.va = page_bound;
-
-	found_elem = hash_find(&spt->spt_hash, &temp_page.hash_elem);
-
+	found_elem = hash_find(&spt->spt_hash, &page->hash_elem);
 	if (found_elem != NULL)
 	{
-		struct page *found_page = hash_entry(found_elem, struct page, hash_elem);
-		return found_page;
+		return hash_entry(found_elem, struct page, hash_elem);
 	}
-	struct page *page = NULL;
+
+	return NULL;
 }
 /* Insert PAGE into spt with validation. */
 bool spt_insert_page(struct supplemental_page_table *spt UNUSED,
 					 struct page *page UNUSED)
 {
-	// unchecked: 페이지 존재할 시, return 결정 안됨
-	if (hash_find(&spt->spt_hash, &page->hash_elem) != NULL)
-		return false;
-	int succ = hash_insert(&spt->spt_hash, &page->hash_elem) != NULL;
+	int succ = hash_insert(&spt->spt_hash, &page->hash_elem) == NULL;
 	return succ;
 }
 
@@ -150,11 +144,11 @@ vm_get_frame(void)
 	/* TODO: Fill this function. */
 
 	// unchecked : zero 초기화 해야하는지 몰?루
-	void *addr = palloc_get_page(PAL_USER);
+	void *addr = palloc_get_page(PAL_USER || PAL_ZERO);
 	if (addr == NULL)
 		PANIC("todo");
 
-	frame = malloc(sizeof(struct frame));
+	frame = calloc(sizeof(struct frame), sizeof(struct frame));
 
 	frame->kva = addr;
 
@@ -183,8 +177,16 @@ bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED,
 	struct page *page = NULL;
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
+	void *page_addr = pg_round_down(addr);
 
-	return vm_do_claim_page(page);
+	if (not_present)
+	{
+		page = spt_find_page(spt, page_addr);
+		if (page != NULL)
+		{
+			return vm_do_claim_page(page);
+		}
+	}
 }
 
 /* Free the page.
@@ -227,7 +229,7 @@ vm_do_claim_page(struct page *page)
 void supplemental_page_table_init(struct supplemental_page_table *spt UNUSED)
 {
 	// unchecked: hash func 검증안됨
-	hash_init(&spt->spt_hash, hash_int, page_table_entry_less_function, NULL);
+	hash_init(&spt->spt_hash, spt_hash_func, page_table_entry_less_function, NULL);
 }
 
 /* Copy supplemental page table from src to dst */

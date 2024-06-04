@@ -423,8 +423,8 @@ remove_elem(struct hash *h, struct hash_elem *e)
 	list_remove(&e->list_elem);
 }
 
-static uint64_t spt_hash_func(const struct hash_elem *e, void *aux)
+uint64_t spt_hash_func(const struct hash_elem *e, void *aux)
 {
 	struct page *page = hash_entry(e, struct page, hash_elem);
-	return hash_int(page->va);
+	return hash_bytes(&page->va, sizeof page->va);
 }
