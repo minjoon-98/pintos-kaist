@@ -148,7 +148,7 @@ vm_get_frame(void)
 	if (addr == NULL)
 		PANIC("todo");
 
-	frame = calloc(sizeof(struct frame), sizeof(struct frame));
+	frame = calloc(sizeof(struct frame), 1);
 
 	frame->kva = addr;
 
