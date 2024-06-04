@@ -31,7 +31,8 @@
         "stdbool.h": "c",
         "page_cache.h": "c",
         "palloc.h": "c",
-        "hash.h": "c"
+        "hash.h": "c",
+        "input.h": "c"
     },
     "editor.formatOnSave": true,
     "editor.formatOnPaste": true,
