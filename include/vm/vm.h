@@ -49,7 +49,7 @@ struct page
 	struct frame *frame; /* Back reference for frame */
 
 	/* Your implementation */
-
+	bool writable;
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
 	union
@@ -68,7 +68,10 @@ struct frame
 {
 	void *kva;
 	struct page *page;
+	struct list_elem frame_elem;
 };
+
+struct list frame_list;
 
 /* The function table for page operations.
  * This is one way of implementing "interface" in C.
@@ -93,14 +96,14 @@ struct page_operations
  * All designs up to you for this. */
 struct supplemental_page_table
 {
-	struct hash va_hash;
+	struct hash spt_hash;
 };
 
 struct supplemental_page
 {
 	struct page *page;
 	void *va;
-	struct hash_elem hash_elem;
+	struct hash_elem spt_elem;
 };
 
 #include "threads/thread.h"
