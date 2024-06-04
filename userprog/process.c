@@ -930,9 +930,9 @@ lazy_load_segment(struct page *page, void *aux)
 	size_t page_read_bytes = un_aux->read_bytes;
 	size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-	file_seek(file, ofs); // 파일의 position을 ofs으로 지정한다.
+	// file_seek(file, ofs); // 파일의 position을 ofs으로 지정한다.
 	// 파일에서 page_read_bytes 만큼 읽어오기
-	if (file_read(file, page->frame->kva, page_read_bytes) != (int)page_read_bytes) // 파일을 read_bytes만큼 물리 프레임에 읽어 들인다.
+	if (file_read_at(file, page->frame->kva, page_read_bytes, ofs) != (int)page_read_bytes) // 파일을 read_bytes만큼 물리 프레임에 읽어 들인다.
 	{
 		// 읽기 실패 시 페이지를 해제하고 false 반환
 		palloc_free_page(page->frame->kva);

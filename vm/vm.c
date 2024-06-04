@@ -99,16 +99,15 @@ err:
 struct supplemental_page *
 spt_find_supplemental_page(struct supplemental_page_table *spt UNUSED, void *va UNUSED)
 {
-	struct supplemental_page *sp = (struct supplemental_page *)malloc(sizeof(struct supplemental_page));
-	sp->va = va; // 가상 주소 설정
-	printf("체크포인트 find_sp 1 : %p\n", va);
-	struct hash_elem *h_elem = hash_find(&spt->spt_hash, &sp->spt_elem); // 해시 테이블에서 검색
-	printf("체크포인트 find_sp 2 : %p\n", h_elem);
+	struct supplemental_page sp;
+	sp.va = va; // 가상 주소 설정
+
+	struct hash_elem *h_elem = hash_find(&spt->spt_hash, &sp.spt_elem); // 해시 테이블에서 검색
+
 	if (h_elem == NULL)
 		return NULL;
 	struct supplemental_page *sp_found = hash_entry(h_elem, struct supplemental_page, spt_elem);
-	printf("체크포인트 find_sp 3 : %p\n", sp_found);
-	free(sp);
+
 	return sp_found; // 발견된 원소 반환
 }
 
@@ -118,11 +117,11 @@ spt_find_page(struct supplemental_page_table *spt UNUSED, void *va UNUSED)
 {
 	struct page *page = NULL;
 	/* TODO: Fill this function. */
-	printf("체크포인트 find_page 1 : %p\n", va);
+	// printf("체크포인트 find_page 1 : %p\n", va);
 	struct supplemental_page *sp_found = spt_find_supplemental_page(spt, va); // 보조 페이지 검색
 	if (sp_found == NULL)
 		return NULL;
-	printf("체크포인트 find_page 2 : %p\n", sp_found);
+
 	page = sp_found->page;
 	return page; // 페이지 반환
 }
@@ -136,10 +135,10 @@ bool spt_insert_page(struct supplemental_page_table *spt UNUSED, struct page *pa
 	ASSERT(new_sp != NULL)
 	new_sp->page = page;
 	new_sp->va = page->va;
-	printf("체크포인트 spt_insert_page page : %p\n", new_sp->page);
-	printf("체크포인트 spt_insert_page va : %p\n", new_sp->va);
+
 	struct hash_elem *old = hash_insert(&spt->spt_hash, &new_sp->spt_elem); // 해시 테이블에 삽입
-	if (old != NULL)														// 같은 원소가 hash에 이미 있을 때 그 원소를 반환
+
+	if (old != NULL) // 같은 원소가 hash에 이미 있을 때 그 원소를 반환
 	{
 		printf("can't insert to supplemental page because addr: %p have already been.\n", page->va);
 		free(new_sp); // 새로 할당된 보조 페이지 해제
@@ -165,6 +164,8 @@ void spt_remove_page(struct supplemental_page_table *spt, struct page *page)
 		struct supplemental_page *old_sp = hash_entry(old, struct supplemental_page, spt_elem);
 		free(old_sp); // 삭제된 보조 페이지 해제
 	}
+	else
+		printf("supplemental_page doesn't exist in table when calling spt_remove_page.\n");
 
 	vm_dealloc_page(page); // 페이지 비할당
 }
@@ -232,9 +233,16 @@ vm_evict_frame(void)
 	/* TODO: swap out the victim and return the evicted frame. */
 	if (victim != NULL)
 	{
-		swap_out(victim->page); // 페이지 스왑 아웃
-		victim->page = NULL;
+		if (swap_out(victim->page))
+			return victim;
+		else
+		{
+			printf("swapping out failed when evicting frame.\n");
+			ASSERT(false)
+		}
 	}
+	else
+		printf("can't find victim.\n");
 	return victim;
 }
 
@@ -277,11 +285,32 @@ vm_get_frame(void)
 
 	frame = calloc(sizeof(struct frame), sizeof(struct frame)); // 프레임 할당 // callo해줘야함
 	frame->kva = kva;											// 프레임 멤버 초기화
+	// frame->page = NULL;
 
 	ASSERT(frame != NULL);
 	ASSERT(frame->page == NULL);
 	return frame;
 }
+
+// static struct frame *
+// vm_get_frame(void)
+// {
+// 	struct frame *frame = NULL;
+// 	/* TODO: Fill this function. */
+// 	frame = (struct frame *)calloc(sizeof(struct frame), 1);
+// 	ASSERT(frame != NULL);
+// 	void *phys_page = palloc_get_page(PAL_USER | PAL_ZERO);
+// 	if (phys_page != NULL)
+// 		frame->kva = phys_page;
+// 	else
+// 	{
+// 		if (vm_evict_frame() != NULL)
+// 			frame->kva = palloc_get_page(PAL_ASSERT | PAL_USER | PAL_ZERO);
+// 		else
+// 			PANIC("It failed to evict frame.\n");
+// 	}
+// 	return frame;
+// }
 
 /* Growing the stack. */
 static void
@@ -389,7 +418,7 @@ vm_do_claim_page(struct page *page)
 }
 
 // 가상 주소를 해시 값으로 변환하는 함수
-static uint64_t va_hash_func(const struct hash_elem *e, void *aux) // 한양대 PPT p.299
+static uint64_t va_hash_func(const struct hash_elem *e, void *aux)
 {
 	/* hash_entry()로 element에 대한 supplemental_page 구조체 검색 */
 	/* hash_int()를 이용해서 supplemental_page의 멤버 vaddr에 대한 해시값을 구하고 반환 */
@@ -401,9 +430,9 @@ static uint64_t va_hash_func(const struct hash_elem *e, void *aux) // 한양대 
 
 // 두 가상 주소를 비교하는 함수
 static bool va_less_func(const struct hash_elem *a,
-						 const struct hash_elem *b, void *aux) // 한양대 PPT p.299
+						 const struct hash_elem *b, void *aux)
 {
-	/* hash_entry()로 각각의 element에 대한 supplemental_page 구조체를 얻은 후 vaddr 비교 (b가 크다면 true, a가 크다면 false */
+	/* hash_entry()로 각각의 element에 대한 supplemental_page 구조체를 얻은 후 vaddr 비교 (b가 크다면 true, a가 크다면 false) */
 	struct supplemental_page *sp_a = (struct supplemental_page *)hash_entry(a, struct supplemental_page, spt_elem);
 	struct supplemental_page *sp_b = (struct supplemental_page *)hash_entry(b, struct supplemental_page, spt_elem);
 	return sp_a->va < sp_b->va;
