@@ -95,7 +95,7 @@ struct page *spt_find_page(struct supplemental_page_table *spt, void *va)
 	{
 		return hash_entry(found_elem, struct page, hash_elem);
 	}
-
+	free(page);
 	return NULL;
 }
 /* Insert PAGE into spt with validation. */
