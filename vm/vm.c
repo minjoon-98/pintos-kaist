@@ -6,6 +6,7 @@
 #include "kernel/hash.h"
 #include "threads/vaddr.h"
 #include "threads/malloc.h"
+#include "string.h"
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -59,21 +60,23 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage, bool writabl
 		/* TODO: Create the page, fetch the initialier according to the VM type,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
-		struct page *page = malloc(sizeof(struct page));
+		struct page *page = calloc(sizeof(struct page),1);
 		if (page == NULL)
 			goto err;
 		// printf("page type = %d", type);
 		// printf("logical addr = %p\n", upage);
-		// unchecked : uninit_new 의 마지막인자로 완전한 initializer의 호출을 넣어줘야하는지 몰?루
 		if (VM_TYPE(type) == VM_ANON)
 			uninit_new(page, upage, init, type, aux, anon_initializer);
 		if (VM_TYPE(type) == VM_FILE)
 			uninit_new(page, upage, init, type, aux, file_backed_initializer);
 		page->writable = writable;
+		page->is_loaded = false;
 		/* TODO: Insert the page into the spt. */
 		if (spt_insert_page(spt, page) == false)
 		{
 			free(page);
+			//uncheckec : err발생시 aux 처리에 대한 검증 필요.
+			free(aux);
 			goto err;
 		}
 		return true;
@@ -143,7 +146,6 @@ vm_get_frame(void)
 	struct frame *frame = NULL;
 	/* TODO: Fill this function. */
 
-	// unchecked : zero 초기화 해야하는지 몰?루
 	void *addr = palloc_get_page(PAL_USER || PAL_ZERO);
 	if (addr == NULL)
 		PANIC("todo");
@@ -187,6 +189,7 @@ bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED,
 			return vm_do_claim_page(page);
 		}
 	}
+	return false;
 }
 
 /* Free the page.
@@ -217,7 +220,7 @@ vm_do_claim_page(struct page *page)
 	/* Set links */
 	frame->page = page;
 	page->frame = frame;
-
+	page->is_loaded = true;
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
 	struct thread *cur_t = thread_current();
 	pml4_set_page(cur_t->pml4, page->va, frame->kva, page->writable);
@@ -228,7 +231,6 @@ vm_do_claim_page(struct page *page)
 /* Initialize new supplemental page table */
 void supplemental_page_table_init(struct supplemental_page_table *spt UNUSED)
 {
-	// unchecked: hash func 검증안됨
 	hash_init(&spt->spt_hash, spt_hash_func, page_table_entry_less_function, NULL);
 }
 
@@ -236,13 +238,45 @@ void supplemental_page_table_init(struct supplemental_page_table *spt UNUSED)
 bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
 								  struct supplemental_page_table *src UNUSED)
 {
+	// unchecked : memcpy 를 통해 요소를 복사해야할지 모르겠음
+	//			 : 부모의 load된 페이지를 복사할 때, claim이 잘 되는지 확인안됨.
+	struct hash_iterator iter;
+	hash_first(&iter, &src->spt_hash);
+	while (hash_next(&iter))
+	{
+		struct page *src_page = hash_entry(hash_cur(&iter), struct page, hash_elem);
+		uint8_t src_type = src_page->operations->type;
+
+		if(VM_TYPE(src_type) == VM_UNINIT){
+			struct page_info_transmitter *aux = NULL;
+			if(aux = malloc(sizeof(struct page_info_transmitter)) == NULL) return false;
+			struct page_info_transmitter *src_aux = src_page->uninit.aux;
+
+			aux->file = src_aux->file;
+			aux->ofs = src_aux->ofs;
+			aux->read_bytes = src_aux->read_bytes;
+			aux->zero_bytes = src_aux->zero_bytes;
+			if (!vm_alloc_page_with_initializer(VM_ANON, src_page->va,
+											src_page->writable, src_page->uninit.init, aux)){
+				free((struct page_info_transmitter *)aux);
+				return false;
+			}
+			continue;
+		}
+
+			vm_alloc_page(src_type, src_page->va, src_page->writable);
+			vm_claim_page(src_page->va);
+			struct page *dst_page =  spt_find_page(dst, src_page->va);
+			memcpy(dst_page->frame->kva, src_page->frame->kva, PGSIZE);
+	}
+	return true;
 }
 
 /* Free the resource hold by the supplemental page table */
 void supplemental_page_table_kill(struct supplemental_page_table *spt UNUSED)
 {
-	/* TODO: Destroy all the supplemental_page_table hold by thread and
-	 * TODO: writeback all the modified contents to the storage. */
+	
+	// hash_destroy
 }
 
 bool page_table_entry_less_function(struct hash_elem *a, struct hash_elem *b, void *aux UNUSED)

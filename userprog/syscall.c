@@ -152,7 +152,7 @@ void check_address(void *addr)
 {
 	// 포인터가 가리키는 주소가 유저 영역의 주소인지 확인
 	// 주어진 주소가 현재 프로세스의 페이지 테이블에 유효하게 매핑되어 있는지 확인
-	if (addr == NULL || !is_user_vaddr(addr) || pml4_get_page(thread_current()->pml4, addr) == NULL)
+	if (addr == NULL || !is_user_vaddr(addr) || pml4_get_page(thread_current()->pml4, addr) == NULL ||)
 	{
 		// 잘못된 접근일 경우 프로세스 종료
 		exit(-1);
