@@ -161,6 +161,7 @@ page_fault(struct intr_frame *f)
 			   write ? "writing" : "reading",
 			   user ? "user" : "kernel");
 	}
+	// printf("용의자 1\n");
 	exit(-1);
 	kill(f);
 }

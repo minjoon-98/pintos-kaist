@@ -33,10 +33,7 @@
         "palloc.h": "c",
         "hash.h": "c",
         "input.h": "c",
-        "malloc.h": "c"
+        "malloc.h": "c",
+        "inode.h": "c"
     },
-    "editor.formatOnSave": true,
-    "editor.formatOnPaste": true,
-    "editor.fontWeight": "normal",
-    "editor.fontVariations": false
 }

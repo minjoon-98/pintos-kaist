@@ -123,15 +123,6 @@ tid_t process_fork(const char *name, struct intr_frame *if_ UNUSED)
 		return TID_ERROR;
 	}
 
-	// /* 삭제 요망*/
-	// if (child->exit_status == -2)
-	// {
-	// 	// 자식이 완전히 종료되고 스케줄링이 이어질 수 있도록 자식에게 signal을 보낸다.
-	// 	// sema_up(&child->exit_sema);
-	// 	// 자식 프로세스의 pid가 아닌 TID_ERROR를 반환한다.
-	// 	return TID_ERROR;
-	// }
-
 	return child_tid;
 }
 
@@ -911,15 +902,6 @@ install_page(void *upage, void *kpage, bool writable)
 /* From here, codes will be used after project 3.
  * If you want to implement the function for only project 2, implement it on the
  * upper block. */
-static bool
-install_page(void *upage, void *kpage, bool writable)
-{
-	struct thread *t = thread_current();
-
-	/* Verify that there's not already a page at that virtual
-	 * address, then map our page there. */
-	return (pml4_get_page(t->pml4, upage) == NULL && pml4_set_page(t->pml4, upage, kpage, writable));
-}
 
 static bool
 lazy_load_segment(struct page *page, void *aux)
@@ -975,11 +957,16 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 		((struct page_info_transmitter *)aux)->ofs = ofs;
 		((struct page_info_transmitter *)aux)->read_bytes = page_read_bytes;
 		((struct page_info_transmitter *)aux)->zero_bytes = page_zero_bytes;
+		// printf("\n\n\n*new page* \n");
+		// printf("file : %p \n", file);
+		// printf("ofs : %d \n", ofs);
+		// printf("page_read_bytes : %d \n", page_read_bytes);
+		// printf("page_zero_bytes : %d \n", page_zero_bytes);
 
 		if (!vm_alloc_page_with_initializer(VM_ANON, upage,
 											writable, lazy_load_segment, aux))
 		{
-			free((struct page_info_transmitter *)aux);
+			free(aux);
 			return false;
 		}
 

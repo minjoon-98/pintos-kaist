@@ -16,6 +16,7 @@
 #include "threads/palloc.h"
 #include "devices/input.h"
 #include "userprog/process.h"
+#include "vm/vm.h"
 
 void syscall_entry(void);
 void syscall_handler(struct intr_frame *);
@@ -149,10 +150,9 @@ void syscall_handler(struct intr_frame *f UNUSED)
 
 /* Check if the address is in user space */
 void check_address(void *addr)
-{
-	// 포인터가 가리키는 주소가 유저 영역의 주소인지 확인
-	// 주어진 주소가 현재 프로세스의 페이지 테이블에 유효하게 매핑되어 있는지 확인
-	if (addr == NULL || !is_user_vaddr(addr) || pml4_get_page(thread_current()->pml4, addr) == NULL ||)
+{	
+	struct supplemental_page_table *spt = &thread_current()->spt;
+	if (addr == NULL || !is_user_vaddr(addr) || spt_find_page(spt, pg_round_down(addr)) == NULL)
 	{
 		// 잘못된 접근일 경우 프로세스 종료
 		exit(-1);
@@ -288,6 +288,7 @@ int exec(const char *cmd_line)
 	{
 		// 메모리 할당에 실패하면 상태 -1로 프로세스를 종료합니다.
 		// palloc_free_page(cl_copy);
+		// printf("용의자 3\n");
 		exit(-1);
 	}
 
@@ -298,6 +299,7 @@ int exec(const char *cmd_line)
 	// 실행에 실패하면 상태 -1로 프로세스를 종료합니다.
 	if (process_exec(cl_copy) == -1)
 	{
+		// printf("용의자 4\n");
 		exit(-1);
 	}
 }
