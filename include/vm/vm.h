@@ -78,13 +78,13 @@ struct page
 	};
 };
 
-struct page_info_transmitter
-{
-	struct file *file;
-	off_t ofs;
-	uint32_t read_bytes;
-	uint32_t zero_bytes;
-};
+// struct page_info_transmitter
+// {
+// 	struct file *file;
+// 	off_t ofs;
+// 	uint32_t read_bytes;
+// 	uint32_t zero_bytes;
+// };
 
 /* The representation of "frame" */
 struct frame
@@ -92,7 +92,10 @@ struct frame
 	// unchecked :멤버번수 추가
 	void *kva;
 	struct page *page;
+	struct list_elem frame_elem;
 };
+
+struct list frame_list;
 
 /* The function table for page operations.
  * This is one way of implementing "interface" in C.
@@ -120,6 +123,8 @@ struct supplemental_page_table
 	struct hash spt_hash;
 };
 
+// 구현 함수
+uint64_t spt_hash_func(const struct hash_elem *e, void *aux);
 bool page_table_entry_less_function(struct hash_elem *a, struct hash_elem *b, void *aux);
 
 #include "threads/thread.h"

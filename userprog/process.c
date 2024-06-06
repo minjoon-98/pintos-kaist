@@ -911,15 +911,6 @@ install_page(void *upage, void *kpage, bool writable)
 /* From here, codes will be used after project 3.
  * If you want to implement the function for only project 2, implement it on the
  * upper block. */
-static bool
-install_page(void *upage, void *kpage, bool writable)
-{
-	struct thread *t = thread_current();
-
-	/* Verify that there's not already a page at that virtual
-	 * address, then map our page there. */
-	return (pml4_get_page(t->pml4, upage) == NULL && pml4_set_page(t->pml4, upage, kpage, writable));
-}
 
 static bool
 lazy_load_segment(struct page *page, void *aux)
@@ -927,11 +918,27 @@ lazy_load_segment(struct page *page, void *aux)
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
-	struct page_info_transmitter *info = (struct page_info_transmitter *)aux;
+	struct uninit_aux *un_aux = (struct uninit_aux *)aux;
 
-	if (file_read_at(info->file, page->va, info->read_bytes, info->ofs) != (int)info->read_bytes)
+	struct file *file = un_aux->file;
+	off_t ofs = un_aux->ofs;
+	size_t page_read_bytes = un_aux->read_bytes;
+	size_t page_zero_bytes = PGSIZE - page_read_bytes;
+
+	// 	// 파일의 position을 ofs으로 지정한다.
+	// 	file_seek(file, ofs);
+	// // 파일을 read_bytes만큼 물리 프레임에 읽어 들인다.
+	// if (file_read(file, page->frame->kva, page_read_bytes) != (int)page_read_bytes)
+
+	// 파일에서 page_read_bytes 만큼 읽어오기
+	if (file_read_at(file, page->frame->kva, page_read_bytes, ofs) != (int)page_read_bytes)
+	{
+		// 읽기 실패 시 페이지를 해제하고 false 반환
+		palloc_free_page(page->frame->kva);
 		return false;
-	memset(page->va + info->read_bytes, 0, info->zero_bytes);
+	}
+	// 나머지 부분을 0으로 채우기
+	memset(page->va + un_aux->read_bytes, 0, un_aux->zero_bytes); // 다 읽은 지점부터 zero_bytes만큼 0으로 채운다.
 
 	return true;
 }
@@ -954,32 +961,33 @@ static bool
 load_segment(struct file *file, off_t ofs, uint8_t *upage,
 			 uint32_t read_bytes, uint32_t zero_bytes, bool writable)
 {
-	ASSERT((read_bytes + zero_bytes) % PGSIZE == 0);
-	ASSERT(pg_ofs(upage) == 0);
-	ASSERT(ofs % PGSIZE == 0);
-	while (read_bytes > 0 || zero_bytes > 0)
+	ASSERT((read_bytes + zero_bytes) % PGSIZE == 0); // read_bytes + zero_bytes가 페이지 크기(PGSIZE)의 배수인지 확인
+	ASSERT(pg_ofs(upage) == 0);						 // upage가 페이지 정렬되어 있는지 확인
+	ASSERT(ofs % PGSIZE == 0);						 // ofs가 페이지 정렬되어 있는지 확인;
+	while (read_bytes > 0 || zero_bytes > 0)		 // read_bytes와 zero_bytes가 0보다 큰 동안 루프를 실행
 	{
 		/* Do calculate how to fill this page.
 		 * We will read PAGE_READ_BYTES bytes from FILE
 		 * and zero the final PAGE_ZERO_BYTES bytes. */
-		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE; // 최대로 읽을 수 있는 크기는 PGSIZE
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
 		void *aux = NULL;
-		aux = malloc(sizeof(struct page_info_transmitter));
-		if (aux == NULL)
-			return false;
+		struct uninit_aux *un_aux;
+		un_aux = (struct uninit_aux *)malloc(sizeof(struct uninit_aux));
+		ASSERT(un_aux != NULL)
+		un_aux->file = file;				  // 내용이 담긴 파일 객체
+		un_aux->ofs = ofs;					  // 이 페이지에서 읽기 시작할 위치
+		un_aux->read_bytes = page_read_bytes; // 이 페이지에서 읽어야 하는 바이트 수
+		un_aux->zero_bytes = page_zero_bytes; // 이 페이지에서 read_bytes만큼 읽고 공간이 남아 0으로 채워야 하는 바이트 수
 
-		((struct page_info_transmitter *)aux)->file = file;
-		((struct page_info_transmitter *)aux)->ofs = ofs;
-		((struct page_info_transmitter *)aux)->read_bytes = page_read_bytes;
-		((struct page_info_transmitter *)aux)->zero_bytes = page_zero_bytes;
+		aux = (void *)un_aux;
 
 		if (!vm_alloc_page_with_initializer(VM_ANON, upage,
 											writable, lazy_load_segment, aux))
 		{
-			free((struct page_info_transmitter *)aux);
+			free((struct uninit_aux *)aux);
 			return false;
 		}
 
@@ -1003,11 +1011,12 @@ setup_stack(struct intr_frame *if_)
 	 * TODO: If success, set the rsp accordingly.
 	 * TODO: You should mark the page is stack. */
 	/* TODO: Your code goes here */
-	if (vm_alloc_page(VM_ANON | VM_MARKER_0, stack_bottom, 1))
+	// VM_MARKER_0: 스택이 저장된 메모리 페이지임을 식별하기 위해 추가 // writable: argument_stack()에서 값을 넣어야 하니 True
+	if (vm_alloc_page(VM_ANON | VM_MARKER_0, stack_bottom, true)) // stack_bottom에 페이지를 하나 할당받는다.
 	{
-		success = vm_claim_page(stack_bottom);
+		success = vm_claim_page(stack_bottom); // 할당 받은 페이지에 바로 물리 프레임을 매핑한다.
 		if (success)
-			if_->rsp = USER_STACK;
+			if_->rsp = USER_STACK; // rsp를 변경한다 (argument_stack에서 이 위치부터 인자를 push한다.)
 	}
 	return success;
 }
