@@ -343,7 +343,7 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
 		{ // uninit page 생성 & 초기화
 			vm_initializer *init = src_page->uninit.init;
 			void *aux = src_page->uninit.aux;
-			vm_alloc_page_with_initializer(VM_ANON, upage, writable, init, aux);
+			vm_alloc_page_with_initializer(page_get_type(src_page), upage, writable, init, aux);
 			continue;
 		}
 
@@ -393,13 +393,13 @@ void supplemental_page_table_kill(struct supplemental_page_table *spt UNUSED)
 	 * 	Why? process가 실행될 때 hash table을 생성한 이후에 process_cleanup()이 호출되는데, 이때는 hash table은 남겨두고 안의 요소들만 제거되어야 한다.
 	 *  hash table까지 지워버리면 만들자마자 지워버리는 게 된다.. process가 실행될 때 빈 hash table이 있어야 하므로 hash table은 남겨두고 안의 요소들만 지워야 하는 것이다!
 	 */
-	// hash_destroy(&spt->spt_hash, hash_destructor);
+	hash_destroy(&spt->spt_hash, hash_destructor);
 
 	/* 3트 실패... */
-	// struct hash_iterator i;
-	// hash_first(&i, &spt->spt_hash);
-	// while (hash_next(&i))
-	// {
-	// 	hash_delete(&spt->spt_hash, hash_cur(&i));
-	// }
+	struct hash_iterator i;
+	hash_first(&i, &spt->spt_hash);
+	while (hash_next(&i))
+	{
+		hash_delete(&spt->spt_hash, hash_cur(&i));
+	}
 }
