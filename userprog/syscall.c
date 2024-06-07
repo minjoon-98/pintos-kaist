@@ -142,6 +142,9 @@ void syscall_handler(struct intr_frame *f UNUSED)
 	case SYS_CLOSE: /* Close an open file. */
 		close((int)f->R.rdi);
 		break;
+	case SYS_MMAP:
+		f->R.rax = mmap((void *)f->R.rdi, (size_t)f->R.rsi, (int)f->R.rdx, (struct file *)f->R.r10, (off_t)f->R.r8);
+		break;
 	// case SYS_DUP2: /* 구현 실패... */
 	// 	dup2((int)f->R.rdi, (int)f->R.rsi);
 	// 	break;
@@ -159,6 +162,7 @@ void check_address(void *addr)
 	if (addr == NULL || !is_user_vaddr(addr) || spt_find_page(spt, pg_round_down(addr)) == NULL)
 	{
 		// 잘못된 접근일 경우 프로세스 종료
+		// printf("용의자 1");
 		exit(-1);
 	}
 }
@@ -292,6 +296,7 @@ int exec(const char *cmd_line)
 	{
 		// 메모리 할당에 실패하면 상태 -1로 프로세스를 종료합니다.
 		palloc_free_page(cl_copy);
+		// printf("용의자 2");
 		exit(-1);
 	}
 
@@ -302,6 +307,7 @@ int exec(const char *cmd_line)
 	// 실행에 실패하면 상태 -1로 프로세스를 종료합니다.
 	if (process_exec(cl_copy) == -1)
 	{
+		// printf("용의자 3");
 		exit(-1);
 	}
 }
@@ -407,6 +413,7 @@ int read(int fd, void *buffer, unsigned size)
 	/* 버퍼가 할당된 프레임이 writable이 아니면 exit(-1) */
 	struct page *found = spt_find_page(&thread_current()->spt, pg_round_down(buffer));
 	if (found != NULL && found->writable == false)
+		// printf("용의자 4");
 		exit(-1);
 
 	off_t read_byte;
@@ -543,7 +550,7 @@ void close(int fd)
 }
 
 void *mmap(void *addr, size_t length, int writable, int fd, off_t offset){
-	check_address(addr);
+	// check_address(addr);
 	struct file *f = get_file_from_fdt(fd);
 	struct file * reopen_file = file_reopen(f);
 	return do_mmap(addr,length, writable, reopen_file, offset);
