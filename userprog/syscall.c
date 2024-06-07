@@ -542,6 +542,13 @@ void close(int fd)
 	}
 }
 
+void *mmap(void *addr, size_t length, int writable, int fd, off_t offset){
+	check_address(addr);
+	struct file *f = get_file_from_fdt(fd);
+	struct file * reopen_file = file_reopen(f);
+	return do_mmap(addr,length, writable, reopen_file, offset);
+}
+
 // /**
 //  * @brief Duplicates an existing file descriptor to a new file descriptor.
 //  *
