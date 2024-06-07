@@ -235,11 +235,11 @@ bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED,
 	}
 	else
 	{
-		// 페이지가 읽기 전용인데 쓰기 시도하는 경우 반환
 		if (page->writable == false && write == true)
+		{
 			return false;
-
-		return vm_do_claim_page(page); // 페이지 클레임
+		}
+		return vm_claim_page(page_addr); // 페이지 클레임
 	}
 }
 
