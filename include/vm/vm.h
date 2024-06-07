@@ -84,6 +84,9 @@ struct page_info_transmitter
 	off_t ofs;
 	uint32_t read_bytes;
 	uint32_t zero_bytes;
+	void* start_addr;
+	off_t size;
+	void* owner; 
 };
 
 /* The representation of "frame" */
