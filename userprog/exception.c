@@ -159,6 +159,7 @@ page_fault(struct intr_frame *f)
 		   write ? "writing" : "reading",
 		   user ? "user" : "kernel");
 
+	// printf("용의자 5");
 	exit(-1);
 	kill(f);
 }
