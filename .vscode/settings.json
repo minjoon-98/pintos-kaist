@@ -34,6 +34,8 @@
         "hash.h": "c",
         "input.h": "c",
         "malloc.h": "c",
-        "inode.h": "c"
+        "inode.h": "c",
+        "bitmap.h": "c",
+        "mmu.h": "c"
     },
 }

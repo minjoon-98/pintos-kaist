@@ -95,6 +95,10 @@ void syscall_handler(struct intr_frame *f UNUSED)
 	// Getting the system call number from the interrupt frame /* %rax 는 시스템 콜 번호 */
 	int syscall_number = f->R.rax;
 
+	// /* project 3 stack growth */
+	// struct thread *t = thread_current();
+	// t->_rsp = f->rsp;
+
 	switch (syscall_number)
 	{
 	case SYS_HALT: /* Halt the operating system. */
@@ -150,7 +154,7 @@ void syscall_handler(struct intr_frame *f UNUSED)
 
 /* Check if the address is in user space */
 void check_address(void *addr)
-{	
+{
 	struct supplemental_page_table *spt = &thread_current()->spt;
 	if (addr == NULL || !is_user_vaddr(addr) || spt_find_page(spt, pg_round_down(addr)) == NULL)
 	{
@@ -287,8 +291,7 @@ int exec(const char *cmd_line)
 	if (cl_copy == NULL)
 	{
 		// 메모리 할당에 실패하면 상태 -1로 프로세스를 종료합니다.
-		// palloc_free_page(cl_copy);
-		// printf("용의자 3\n");
+		palloc_free_page(cl_copy);
 		exit(-1);
 	}
 
@@ -299,7 +302,6 @@ int exec(const char *cmd_line)
 	// 실행에 실패하면 상태 -1로 프로세스를 종료합니다.
 	if (process_exec(cl_copy) == -1)
 	{
-		// printf("용의자 4\n");
 		exit(-1);
 	}
 }
