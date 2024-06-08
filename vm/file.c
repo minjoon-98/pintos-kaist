@@ -44,7 +44,6 @@ bool file_backed_initializer(struct page *page, enum vm_type type, void *kva)
 	file_page->start_addr = aux->start_addr;
 	file_page->size = aux->size;
 	file_page->owner = aux->owner;
-
 	return true;
 }
 
