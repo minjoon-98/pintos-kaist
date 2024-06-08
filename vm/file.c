@@ -30,7 +30,7 @@ bool file_backed_initializer(struct page *page, enum vm_type type, void *kva)
 {
 	/* Set up the handler */
 	page->operations = &file_ops;
-	page->type = VM_FILE;
+	page->type = page->uninit.type;
 
 	struct page_info_transmitter *aux = page->uninit.aux;
 	struct file_page *file_page = &page->file;
@@ -112,7 +112,7 @@ do_mmap(void *addr, size_t length, int writable, struct file *file, off_t offset
 		((struct page_info_transmitter *)aux)->size = read_size;
 		((struct page_info_transmitter *)aux)->owner = t;
 
-		if (!vm_alloc_page_with_initializer(VM_FILE, upage,
+		if (!vm_alloc_page_with_initializer(VM_FILE|VM_MARKER_1, upage,
 											writable, lazy_load_segment, aux))
 		{
 			free(aux);

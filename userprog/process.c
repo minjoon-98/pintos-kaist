@@ -910,7 +910,6 @@ lazy_load_segment(struct page *page, void *aux)
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
 	struct page_info_transmitter *info = (struct page_info_transmitter *)aux;
-
 	if (file_read_at(info->file, page->va, info->read_bytes, info->ofs) != (int)info->read_bytes)
 		return false;
 	memset(page->va + info->read_bytes, 0, info->zero_bytes);
