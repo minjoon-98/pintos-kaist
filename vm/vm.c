@@ -300,7 +300,7 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
 	{
 		parent_page = hash_entry(hash_cur(&iterator), struct page, hash_elem);
 		uint8_t parent_type = parent_page->type;
-		printf("page type = %d \n", parent_type);
+		// printf("page type = %d \n", parent_type);
 		if (VM_TYPE(parent_type) == VM_UNINIT)
 		{
 			src_aux = (struct page_info_transmitter *)parent_page->uninit.aux;
