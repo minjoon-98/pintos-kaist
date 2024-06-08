@@ -115,6 +115,7 @@ bool spt_insert_page(struct supplemental_page_table *spt UNUSED,
 
 void spt_remove_page(struct supplemental_page_table *spt, struct page *page)
 {
+	// hash_delete(&spt->spt_hash, &page->hash_elem);
 	vm_dealloc_page(page);
 	return true;
 }
@@ -173,7 +174,7 @@ static void vm_stack_growth(void *addr UNUSED)
 	// 페이지를 찾을 때까지 루프를 돌며 스택을 확장
 	while (spt_find_page(spt, page_addr) == NULL)
 	{
-		succ = vm_alloc_page(VM_ANON, page_addr, true); // 새로운 페이지 할당
+		succ = vm_alloc_page(VM_ANON||VM_MARKER_0, page_addr, true); // 새로운 페이지 할당
 		if (!succ)
 			PANIC("BAAAAAM !!"); // 할당 실패 시 패닉
 		page_addr += PGSIZE;	 // 다음 페이지 주소로 이동
@@ -275,7 +276,6 @@ vm_do_claim_page(struct page *page)
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
 	struct thread *cur_t = thread_current();
 	pml4_set_page(cur_t->pml4, page->va, frame->kva, page->writable);
-
 	return swap_in(page, frame->kva);
 }
 
@@ -292,7 +292,6 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
 	struct hash_iterator iterator;
 	struct page *parent_page, *child_page = NULL;
 	struct page_info_transmitter *src_aux, *dst_aux = NULL;
-	enum vm_type page_type;
 	bool succ = false;
 
 	hash_first(&iterator, &src->spt_hash);
@@ -300,38 +299,62 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
 	while (hash_next(&iterator))
 	{
 		parent_page = hash_entry(hash_cur(&iterator), struct page, hash_elem);
-		uint8_t parent_type = parent_page->operations->type;
+		uint8_t parent_type = parent_page->type;
+		// printf("page type = %d \n", parent_type);
 		if (VM_TYPE(parent_type) == VM_UNINIT)
 		{
 			src_aux = (struct page_info_transmitter *)parent_page->uninit.aux;
-			dst_aux = (struct page_info_transmitter *)calloc(
-				1, sizeof(struct page_info_transmitter));
+			dst_aux = malloc(sizeof(struct page_info_transmitter));
 			if (!dst_aux)
 				return false;
+
 			dst_aux->file = src_aux->file;
 			dst_aux->read_bytes = src_aux->read_bytes;
 			dst_aux->zero_bytes = src_aux->zero_bytes;
 			dst_aux->ofs = src_aux->ofs;
 
-			if (!vm_alloc_page_with_initializer(
-					parent_page->uninit.type, parent_page->va, parent_page->writable,
-					parent_page->uninit.init, dst_aux))
+			if (!vm_alloc_page_with_initializer(parent_page->uninit.type, parent_page->va,
+												parent_page->writable, parent_page->uninit.init, dst_aux))
 			{
-
 				free(dst_aux);
 				return false;
 			}
+			continue;
+		} else if (VM_TYPE(parent_type) == VM_FILE){
+			uint8_t flag = VM_FILE|VM_MARKER_1;
+			if ((parent_type & flag) == flag){
+				struct file *new_file = file_reopen(parent_page->file.file);
+				if (do_mmap(parent_page->va, parent_page->file.size,
+							parent_page->writable, new_file, parent_page->file.ofs) == NULL)
+				{	
+					return false;
+				}
+				continue;
+			}
+			// unchecked: swap in 구현시, 리팩토링 필요
+			if (!vm_alloc_page(VM_ANON, parent_page->va, parent_page->writable))
+				return false;
+			child_page = spt_find_page(dst, parent_page->va);
+			if (!child_page) return false;
+			
+			if (!vm_claim_page(parent_page->va))
+				return false;
+			child_page->type = VM_FILE;
+			memcpy(&child_page->file, &parent_page->file, sizeof(struct file_page));
+			memcpy(child_page->frame->kva, parent_page->frame->kva, PGSIZE);
 			continue;
 		}
 		if (!vm_alloc_page(VM_ANON | VM_MARKER_0, parent_page->va, parent_page->writable))
 			return false;
 		if (!vm_claim_page(parent_page->va))
 			return false;
+
 		child_page = spt_find_page(dst, parent_page->va);
 		if (!child_page)
 			return false;
+
 		memcpy(child_page->frame->kva, parent_page->frame->kva, PGSIZE);
-		/* TODO : copy-on-write 구현한다면 부모의 kva를 자식의 va가 가르키도록 설정 */
+		/* TODO : copy-on-write 구현한다면 부모의 kva를 자식의 va가 가리키도록 설정 */
 	}
 	succ = true;
 	return succ;
