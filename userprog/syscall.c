@@ -323,7 +323,6 @@ int exec(const char *cmd_line)
 
 	// 명령어 줄을 새로 할당한 메모리 페이지에 복사합니다.
 	strlcpy(cl_copy, cmd_line, PGSIZE);
-
 	// 복사된 명령어 줄을 사용하여 새로운 프로세스를 실행합니다.
 	// 실행에 실패하면 상태 -1로 프로세스를 종료합니다.
 	if (process_exec(cl_copy) == -1)

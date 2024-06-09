@@ -334,7 +334,6 @@ int process_exec(void *f_name)
 
 	/* 페이지 할당 해제 */
 	palloc_free_page(file_name);
-
 	/* Start switched process. */ /* 프로세스를 시작합니다. */
 	// printf("프로세스 시작 ! Starting switched process\n"); /* Debug */
 	do_iret(&_if);

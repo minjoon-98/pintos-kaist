@@ -169,7 +169,6 @@ void do_munmap(void *addr)
 
 		hash_delete(&spt->spt_hash, &target_page->hash_elem);
 		vm_dealloc_page(target_page);
-
 		remain_size -= PAGE_SIZE;
 		ofs += PAGE_SIZE;
 		upage += PAGE_SIZE;

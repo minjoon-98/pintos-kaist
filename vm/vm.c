@@ -226,8 +226,7 @@ bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED,
 		// 스택 확장이 필요한지 검사
 		if (addr < (void *)USER_STACK &&					  // 접근 주소가 사용자 스택 내에 있고
 				addr == (void *)(f->rsp - 8) &&				  // rsp - 8보다 크거나 같으며
-				addr >= (void *)(USER_STACK - STACK_LIMIT) || // 스택 크기가 1MB 이하인 경우
-			addr > f->rsp)
+				addr >= (void *)(USER_STACK - STACK_LIMIT)) // 스택 크기가 1MB 이하인 경우)
 		{
 			vm_stack_growth(addr); // 스택 확장
 			return true;		   // 스택 확장 성공
@@ -347,7 +346,7 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
 			child_page->file.file = file_reopen(parent_page->file.file);
 			continue;
 		}
-		if (!vm_alloc_page(VM_ANON | VM_MARKER_0, parent_page->va, parent_page->writable))
+		if (!vm_alloc_page(parent_type, parent_page->va, parent_page->writable))
 			return false;
 		if (!vm_claim_page(parent_page->va))
 			return false;
