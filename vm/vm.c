@@ -151,7 +151,7 @@ vm_get_frame(void)
 	struct frame *frame = NULL;
 	/* TODO: Fill this function. */
 
-	void *addr = palloc_get_page(PAL_USER || PAL_ZERO);
+	void *addr = palloc_get_page(PAL_USER);
 	if (addr == NULL)
 		PANIC("todo");
 
@@ -174,7 +174,7 @@ static void vm_stack_growth(void *addr UNUSED)
 	// 페이지를 찾을 때까지 루프를 돌며 스택을 확장
 	while (spt_find_page(spt, page_addr) == NULL)
 	{
-		succ = vm_alloc_page(VM_ANON||VM_MARKER_0, page_addr, true); // 새로운 페이지 할당
+		succ = vm_alloc_page(VM_ANON|VM_MARKER_0, page_addr, true); // 새로운 페이지 할당
 		if (!succ)
 			PANIC("BAAAAAM !!"); // 할당 실패 시 패닉
 		page_addr += PGSIZE;	 // 다음 페이지 주소로 이동
@@ -321,6 +321,7 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
 			}
 			continue;
 		} else if (VM_TYPE(parent_type) == VM_FILE){
+			/* mmap 형식 분기처리 구현코드 (분기처리 필요 불분명) */
 			uint8_t flag = VM_FILE|VM_MARKER_1;
 			if ((parent_type & flag) == flag){
 				struct file *new_file = file_reopen(parent_page->file.file);
@@ -331,6 +332,7 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
 				}
 				continue;
 			}
+
 			// unchecked: swap in 구현시, 리팩토링 필요
 			if (!vm_alloc_page(VM_ANON, parent_page->va, parent_page->writable))
 				return false;
@@ -342,6 +344,7 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
 			child_page->type = VM_FILE;
 			memcpy(&child_page->file, &parent_page->file, sizeof(struct file_page));
 			memcpy(child_page->frame->kva, parent_page->frame->kva, PGSIZE);
+			child_page->file.file = file_reopen(parent_page->file.file);
 			continue;
 		}
 		if (!vm_alloc_page(VM_ANON | VM_MARKER_0, parent_page->va, parent_page->writable))

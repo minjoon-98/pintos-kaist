@@ -429,7 +429,12 @@ int filesize(int fd)
  */
 int read(int fd, void *buffer, unsigned size)
 {
-	check_address(buffer); // 주어진 버퍼 주소가 유효한지 확인합니다.
+	if (buffer == NULL || !is_user_vaddr(buffer))
+	{
+		// 잘못된 접근일 경우 프로세스 종료
+		// printf("용의자 1");
+		exit(-1);
+	} // 주어진 버퍼 주소가 유효한지 확인합니다.
 
 	/* 버퍼가 할당된 프레임이 writable이 아니면 exit(-1) */
 	struct page *found = spt_find_page(&thread_current()->spt, pg_round_down(buffer));
@@ -491,7 +496,7 @@ int read(int fd, void *buffer, unsigned size)
  */
 int write(int fd, const void *buffer, unsigned size)
 {
-	check_address((void *)buffer); // 주어진 버퍼 주소가 유효한지 확인합니다.
+	// check_address((void *)buffer); // 주어진 버퍼 주소가 유효한지 확인합니다.
 
 	if (buffer == NULL || !is_user_vaddr(buffer))
 	{
@@ -603,17 +608,13 @@ void close(int fd)
  */
 void *mmap(void *addr, size_t length, int writable, int fd, off_t offset)
 {
-	// 페이지 시작 주소로 정렬된 주소를 계산
-	void *page_start_addr = pg_round_down(addr);
-
 	// 유효성 검사: NULL 주소, 커널 주소, 페이지 정렬되지 않은 주소, 잘못된 길이, 잘못된 오프셋
-	if (addr == NULL ||
+	if( addr == NULL||
 		is_kernel_vaddr(addr) ||
-		(pg_round_down(addr) != addr) ||
-		length == 0 ||
-		length >= KERN_BASE ||
-		(pg_round_down(offset) != offset))
-		return NULL;
+      	(pg_round_down(addr) != addr) ||
+      	length >= KERN_BASE ||
+      	(pg_round_down(offset) != offset))
+      	return NULL;
 
 	// 콘솔 입출력 파일 디스크립터 확인
 	if (fd == STDIN_FILENO || fd == STDOUT_FILENO)
@@ -625,8 +626,8 @@ void *mmap(void *addr, size_t length, int writable, int fd, off_t offset)
 
 	// 파일 디스크립터로부터 파일 객체 가져오기
 	struct file *f = get_file_from_fdt(fd);
-	if (f == NULL || file_length(f) == 0 || file_length(f) <= offset)
-		return NULL;
+	if (length == 0 || f == NULL || file_length(f) == 0)
+		exit(-1);
 
 	// 파일 재개방
 	struct file *reopen_file = file_reopen(f);
@@ -646,10 +647,6 @@ void *mmap(void *addr, size_t length, int writable, int fd, off_t offset)
  */
 void munmap(void *addr)
 {
-	// 주소가 페이지 시작 주소와 같은지 확인
-	if (addr != pg_round_down(addr))
-		return;
-
 	// 페이지 테이블에서 해당 주소에 대한 페이지를 찾음
 	struct page *page = spt_find_page(&thread_current()->spt, addr);
 	if (!page || page->operations->type != VM_FILE)
