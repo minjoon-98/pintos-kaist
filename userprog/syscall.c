@@ -143,12 +143,14 @@ void syscall_handler(struct intr_frame *f UNUSED)
 	case SYS_CLOSE: /* Close an open file. */
 		close((int)f->R.rdi);
 		break;
+#ifdef VM
 	case SYS_MMAP:
 		f->R.rax = mmap((void *)f->R.rdi, (size_t)f->R.rsi, (int)f->R.rdx, (struct file *)f->R.r10, (off_t)f->R.r8);
 		break;
 	case SYS_MUNMAP:
 		munmap((void *)f->R.rdi);
 		break;
+#endif
 	// case SYS_DUP2: /* 구현 실패... */
 	// 	dup2((int)f->R.rdi, (int)f->R.rsi);
 	// 	break;
@@ -162,15 +164,20 @@ void syscall_handler(struct intr_frame *f UNUSED)
 /* Check if the address is in user space */
 void check_address(void *addr)
 {
+
+#ifdef VM
 	struct supplemental_page_table *spt = &thread_current()->spt;
-	if (addr == NULL || !is_user_vaddr(addr) || spt_find_page(spt, pg_round_down(addr)) == NULL)
+	if (spt_find_page(spt, pg_round_down(addr)) == NULL)
+		exit(-1);
+#endif
+	if (addr == NULL || !is_user_vaddr(addr))
 	{
 		// 잘못된 접근일 경우 프로세스 종료
-		// printf("용의자 1");
 		exit(-1);
 	}
 }
 
+#ifdef VM
 bool check_address_overlap(void *addr, size_t length)
 {
 	struct thread *t = thread_current();
@@ -187,6 +194,7 @@ bool check_address_overlap(void *addr, size_t length)
 	}
 	return false;
 }
+#endif
 
 /* Retrieve arguments from the user stack and store them in argv */
 void get_argument(void *rsp, int *argv, int argc)
@@ -317,7 +325,6 @@ int exec(const char *cmd_line)
 	{
 		// 메모리 할당에 실패하면 상태 -1로 프로세스를 종료합니다.
 		palloc_free_page(cl_copy);
-		// printf("용의자 2");
 		exit(-1);
 	}
 
@@ -327,7 +334,6 @@ int exec(const char *cmd_line)
 	// 실행에 실패하면 상태 -1로 프로세스를 종료합니다.
 	if (process_exec(cl_copy) == -1)
 	{
-		// printf("용의자 3");
 		exit(-1);
 	}
 }
@@ -428,18 +434,14 @@ int filesize(int fd)
  */
 int read(int fd, void *buffer, unsigned size)
 {
-	if (buffer == NULL || !is_user_vaddr(buffer))
-	{
-		// 잘못된 접근일 경우 프로세스 종료
-		// printf("용의자 1");
-		exit(-1);
-	} // 주어진 버퍼 주소가 유효한지 확인합니다.
+	check_address(buffer);
 
+#ifdef VM
 	/* 버퍼가 할당된 프레임이 writable이 아니면 exit(-1) */
 	struct page *found = spt_find_page(&thread_current()->spt, pg_round_down(buffer));
 	if (found != NULL && found->writable == false)
-		// printf("용의자 4");
 		exit(-1);
+#endif
 
 	off_t read_byte;
 	uint8_t *read_buffer = buffer;
@@ -495,7 +497,10 @@ int read(int fd, void *buffer, unsigned size)
  */
 int write(int fd, const void *buffer, unsigned size)
 {
-	// check_address((void *)buffer); // 주어진 버퍼 주소가 유효한지 확인합니다.
+
+#ifdef USERPROG
+	check_address((void *)buffer); // 주어진 버퍼 주소가 유효한지 확인합니다.
+#endif
 
 	if (buffer == NULL || !is_user_vaddr(buffer))
 	{
@@ -589,6 +594,8 @@ void close(int fd)
 	}
 }
 
+#ifdef VM
+
 /**
  *
  * @brief Maps a file into memory.
@@ -618,7 +625,6 @@ void *mmap(void *addr, size_t length, int writable, int fd, off_t offset)
 	// 콘솔 입출력 파일 디스크립터 확인
 	if (fd == STDIN_FILENO || fd == STDOUT_FILENO)
 		return NULL;
-
 	// 이미 매핑된 주소 범위인지 확인
 	if (check_address_overlap(addr, length))
 		return NULL;
@@ -654,6 +660,7 @@ void munmap(void *addr)
 	// do_munmap 함수를 호출하여 매핑 해제 수행
 	do_munmap(addr);
 }
+#endif
 
 // /**
 //  * @brief Duplicates an existing file descriptor to a new file descriptor.
