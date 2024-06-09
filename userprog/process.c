@@ -234,7 +234,7 @@ __do_fork(void *aux)
 	 * TODO:       in include/filesys/file.h. Note that parent should not return
 	 * TODO:       from the fork() until this function successfully duplicates
 	 * TODO:       the resources of parent.*/
-
+	lock_acquire(&filesys_lock);
 	/* Duplicate file descriptors */ /* 파일 디스크립터 복제 */
 	for (int fd = 2; fd < MAX_FILES; fd++)
 	{
@@ -246,7 +246,7 @@ __do_fork(void *aux)
 		}
 	}
 	current->next_fd = parent->next_fd; // next_fd도 복제
-
+	lock_release(&filesys_lock);
 	// /* Notify parent that fork is successful */
 	sema_up(&current->load_sema); // Notify parent that fork is successful // 로드가 완료될 때까지 기다리고 있던 부모 대기 해제
 
@@ -470,7 +470,9 @@ void process_exit(void)
 	// Close the running file.
 	if (curr->run_file != NULL)
 	{
+		// lock_acquire(&filesys_lock);
 		file_close(curr->run_file);
+		// lock_release(&filesys_lock);
 		curr->run_file = NULL;
 	}
 	// file_close(curr->run_file); // 현재 실행 중인 파일을 닫는다. // for rox- (실행중에 수정 못하도록)
@@ -651,6 +653,7 @@ load(const char *file_name, struct intr_frame *if_)
 	process_activate(thread_current());
 
 	/* Open executable file. */
+	// lock_acquire(&filesys_lock);
 	file = filesys_open(file_name);
 	if (file == NULL)
 	{
@@ -746,6 +749,7 @@ load(const char *file_name, struct intr_frame *if_)
 done:
 	/* We arrive here whether the load is successful or not. */
 	// file_close(file); // load에서 file_close(file)을 해주면 file이 닫히면서 lock이 풀리게 된다. 따라서 load에서 닫지 말고 process_exit에서 닫아줌
+	// lock_release(&filesys_lock);
 	return success;
 }
 
