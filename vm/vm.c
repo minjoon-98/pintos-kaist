@@ -174,7 +174,7 @@ static void vm_stack_growth(void *addr UNUSED)
 	// 페이지를 찾을 때까지 루프를 돌며 스택을 확장
 	while (spt_find_page(spt, page_addr) == NULL)
 	{
-		succ = vm_alloc_page(VM_ANON|VM_MARKER_0, page_addr, true); // 새로운 페이지 할당
+		succ = vm_alloc_page(VM_ANON | VM_MARKER_0, page_addr, true); // 새로운 페이지 할당
 		if (!succ)
 			PANIC("BAAAAAM !!"); // 할당 실패 시 패닉
 		page_addr += PGSIZE;	 // 다음 페이지 주소로 이동
@@ -224,9 +224,9 @@ bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED,
 			return false;
 
 		// 스택 확장이 필요한지 검사
-		if (addr < (void *)USER_STACK &&					  // 접근 주소가 사용자 스택 내에 있고
-				addr == (void *)(f->rsp - 8) &&				  // rsp - 8보다 크거나 같으며
-				addr >= (void *)(USER_STACK - STACK_LIMIT)) // 스택 크기가 1MB 이하인 경우)
+		if (addr < (void *)USER_STACK &&				// 접근 주소가 사용자 스택 내에 있고
+			addr == (void *)(f->rsp - 8) &&				// rsp - 8보다 크거나 같으며
+			addr >= (void *)(USER_STACK - STACK_LIMIT)) // 스택 크기가 1MB 이하인 경우)
 		{
 			vm_stack_growth(addr); // 스택 확장
 			return true;		   // 스택 확장 성공
@@ -284,6 +284,11 @@ void supplemental_page_table_init(struct supplemental_page_table *spt UNUSED)
 	hash_init(&spt->spt_hash, spt_hash_func, page_table_entry_less_function, NULL);
 }
 
+/*
+ * 부모의 supplemental_page_table을 복사하여 자식의 supplemental_page_table에 추가합니다.
+ * 부모 페이지 테이블의 각 페이지를 순회하면서 복사하고, 자식 페이지 테이블에 추가합니다.
+ * 성공하면 true를 반환하고, 실패하면 false를 반환합니다.
+ */
 /* Copy supplemental page table from src to dst */
 bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
 								  struct supplemental_page_table *src UNUSED)
@@ -293,15 +298,18 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
 	struct page_info_transmitter *src_aux, *dst_aux = NULL;
 	bool succ = false;
 
+	// 부모 페이지 테이블을 순회하는 이터레이터를 초기화합니다.
 	hash_first(&iterator, &src->spt_hash);
 
 	while (hash_next(&iterator))
 	{
 		parent_page = hash_entry(hash_cur(&iterator), struct page, hash_elem);
 		uint8_t parent_type = parent_page->type;
-		// printf("page type = %d \n", parent_type);
+
+		// 초기화되지 않은 페이지인 경우
 		if (VM_TYPE(parent_type) == VM_UNINIT)
 		{
+			// 부모 페이지의 초기화자(aux) 정보를 복사하여 자식 페이지에 할당합니다.
 			src_aux = (struct page_info_transmitter *)parent_page->uninit.aux;
 			dst_aux = malloc(sizeof(struct page_info_transmitter));
 			if (!dst_aux)
@@ -312,6 +320,7 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
 			dst_aux->zero_bytes = src_aux->zero_bytes;
 			dst_aux->ofs = src_aux->ofs;
 
+			// 자식 페이지에 초기화자를 이용하여 페이지를 할당합니다.
 			if (!vm_alloc_page_with_initializer(parent_page->uninit.type, parent_page->va,
 												parent_page->writable, parent_page->uninit.init, dst_aux))
 			{
@@ -319,25 +328,32 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
 				return false;
 			}
 			continue;
-		} else if (VM_TYPE(parent_type) == VM_FILE){
-			/* mmap 형식 분기처리 구현코드 (분기처리 필요 불분명) */
-			uint8_t flag = VM_FILE|VM_MARKER_1;
-			if ((parent_type & flag) == flag){
+		}
+		// 파일 매핑된 페이지인 경우
+		else if (VM_TYPE(parent_type) == VM_FILE)
+		{
+			// 파일 매핑 형식을 분기 처리합니다.
+			// VM_MARKER_1 비트가 설정되어 있는지 확인하여 파일 매핑(mmap된 파일)인지를 판별합니다.
+			uint8_t flag = VM_FILE | VM_MARKER_1;
+			if ((parent_type & flag) == flag)
+			{
+				// 파일을 다시 열어서 자식 페이지에 매핑합니다.
 				struct file *new_file = file_reopen(parent_page->file.file);
 				if (do_mmap(parent_page->va, parent_page->file.size,
 							parent_page->writable, new_file, parent_page->file.ofs) == NULL)
-				{	
+				{
 					return false;
 				}
 				continue;
 			}
 
-			// unchecked: swap in 구현시, 리팩토링 필요
+			// 파일 매핑이 아닌 경우, 페이지를 할당하고 파일 내용을 복사합니다.
 			if (!vm_alloc_page(VM_ANON, parent_page->va, parent_page->writable))
 				return false;
 			child_page = spt_find_page(dst, parent_page->va);
-			if (!child_page) return false;
-			
+			if (!child_page)
+				return false;
+
 			if (!vm_claim_page(parent_page->va))
 				return false;
 			child_page->type = VM_FILE;
@@ -346,6 +362,7 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
 			child_page->file.file = file_reopen(parent_page->file.file);
 			continue;
 		}
+		// 일반 페이지인 경우, 페이지를 할당하고 메모리 내용을 복사합니다.
 		if (!vm_alloc_page(parent_type, parent_page->va, parent_page->writable))
 			return false;
 		if (!vm_claim_page(parent_page->va))
@@ -356,7 +373,7 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
 			return false;
 
 		memcpy(child_page->frame->kva, parent_page->frame->kva, PGSIZE);
-		/* TODO : copy-on-write 구현한다면 부모의 kva를 자식의 va가 가리키도록 설정 */
+		// TODO: copy-on-write 구현한다면 부모의 kva를 자식의 va가 가리키도록 설정
 	}
 	succ = true;
 	return succ;

@@ -608,12 +608,12 @@ void close(int fd)
 void *mmap(void *addr, size_t length, int writable, int fd, off_t offset)
 {
 	// 유효성 검사: NULL 주소, 커널 주소, 페이지 정렬되지 않은 주소, 잘못된 길이, 잘못된 오프셋
-	if( addr == NULL||
+	if (addr == NULL ||
 		is_kernel_vaddr(addr) ||
-      	(pg_round_down(addr) != addr) ||
-      	length >= KERN_BASE ||
-      	(pg_round_down(offset) != offset))
-      	return NULL;
+		(pg_round_down(addr) != addr) ||
+		length >= KERN_BASE ||
+		(pg_round_down(offset) != offset))
+		return NULL;
 
 	// 콘솔 입출력 파일 디스크립터 확인
 	if (fd == STDIN_FILENO || fd == STDOUT_FILENO)
