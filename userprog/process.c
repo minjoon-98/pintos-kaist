@@ -334,7 +334,6 @@ int process_exec(void *f_name)
 
 	/* 페이지 할당 해제 */
 	palloc_free_page(file_name);
-
 	/* Start switched process. */ /* 프로세스를 시작합니다. */
 	// printf("프로세스 시작 ! Starting switched process\n"); /* Debug */
 	do_iret(&_if);
@@ -476,9 +475,10 @@ void process_exit(void)
 	// file_close(curr->run_file); // 현재 실행 중인 파일을 닫는다. // for rox- (실행중에 수정 못하도록)
 	// curr->run_file = NULL;
 	
-	process_cleanup(); // pml4를 해제(이 함수를 call 한 thread의 pml4)
 	// Notify parent that we are exiting. /* 부모에게 종료 상태를 알려줍니다. */
 	sema_up(&curr->wait_sema); // 자식 스레드가 종료될 때 대기하고 있는 부모에게 signal을 보낸다. // 종료되었다고 기다리고 있는 부모 thread에게 signal 보냄-> sema_up에서 val을 올려줌
+
+	process_cleanup(); // pml4를 해제(이 함수를 call 한 thread의 pml4)
 
 	// Wait for parent to acknowledge exit.
 	sema_down(&curr->exit_sema); // 자식 스레드가 완료되었음을 알리는 세마포어를 사용합니다. // 부모의 signal을 기다린다. 대기가 풀리고 나서 do_schedule(THREAD_DYING)이 이어져 다른 스레드가 실행된다. // 부모의 exit_Status가 정확히 전달되었는지 확인(wait)
@@ -868,7 +868,7 @@ setup_stack(struct intr_frame *if_)
 	uint8_t *kpage;
 	bool success = false;
 
-	kpage = palloc_get_page(PAL_USER | PAL_ZERO);
+	kpage = palloc_get_page(PAL_USER);
 	if (kpage != NULL)
 	{
 		success = install_page(((uint8_t *)USER_STACK) - PGSIZE, kpage, true);
@@ -913,6 +913,7 @@ lazy_load_segment(struct page *page, void *aux)
 	if (file_read_at(info->file, page->va, info->read_bytes, info->ofs) != (int)info->read_bytes)
 		return false;
 	memset(page->va + info->read_bytes, 0, info->zero_bytes);
+	pml4_set_dirty(thread_current()->pml4, page->va, false);
 	return true;
 }
 

@@ -37,7 +37,7 @@ bool file_backed_initializer(struct page *page, enum vm_type type, void *kva)
 
 	memset(file_page, 0, sizeof(*file_page));
 
-	file_page->file = file_reopen(aux->file); // Reopen the file to ensure independent reference
+	file_page->file = aux->file;
 	file_page->ofs = aux->ofs;
 	file_page->read_bytes = aux->read_bytes;
 	file_page->zero_bytes = aux->zero_bytes;
@@ -59,25 +59,34 @@ static bool
 file_backed_swap_out(struct page *page)
 {
 	struct file_page *file_page UNUSED = &page->file;
+	// struct thread *t = thread_current();
+
+	// if (pml4_is_dirty(t->pml4, page->va))
+	// {
+	// 	// 페이지가 더럽다면 파일에 변경 내용을 기록
+	// 	file_write_at(file_page->file, page->va, file_page->read_bytes, file_page->ofs);
+	// }
 }
 
 /* Destory the file backed page. PAGE will be freed by the caller. */
 static void
 file_backed_destroy(struct page *page)
 {
-	struct file_page *file_page UNUSED = &page->file;
-	struct thread *t = thread_current();
+    struct file_page *file_page UNUSED = &page->file;
+    struct thread *t = thread_current();
 
-	if (pml4_is_dirty(t->pml4, page->va))
-	{
-		// 페이지가 더럽다면 파일에 변경 내용을 기록
-		file_write_at(file_page->file, page->va, file_page->read_bytes, file_page->ofs);
-	}
+    // 페이지가 더럽다면 파일에 변경 내용을 기록
+    if (pml4_is_dirty(t->pml4, page->va))
+    {
+        file_write_at(file_page->file, page->va, file_page->read_bytes, file_page->ofs);
+        pml4_set_dirty(t->pml4, page->va, false);
+    }
 
-	// 파일 닫기
-	file_close(file_page->file);
+    // 페이지 테이블에서 제거
+    pml4_clear_page(t->pml4, page->va);
 
-	// 페이지 구조체를 해제하지 않습니다. 호출자가 해제해야 합니다.
+    // 해시 테이블에서 제거
+    hash_delete(&t->spt.spt_hash, &page->hash_elem);
 }
 
 /* Do the mmap */
@@ -85,7 +94,11 @@ void *
 do_mmap(void *addr, size_t length, int writable, struct file *file, off_t offset)
 {
 	off_t remain_size;
-	uint32_t read_size = (file_length(file) - offset) < length ? (file_length(file) - offset) : length;
+	off_t original_size = file_length(file);
+	if	(original_size <= offset ||
+		(pg_round_down(addr) != addr) ||
+		offset % PGSIZE != 0) return NULL;
+	uint32_t read_size = (original_size - offset) < length ? (original_size - offset) : length;
 	remain_size = read_size;
 	off_t ofs = offset;
 	off_t read_bytes, zero_bytes;
@@ -133,7 +146,7 @@ void do_munmap(void *addr)
 
 	struct page *target_page = spt_find_page(spt, addr);
 	if (target_page == NULL ||
-		target_page->type != VM_TYPE(VM_FILE) ||
+		VM_TYPE(target_page->type) != VM_FILE ||
 		target_page->file.start_addr != addr)
 		return;
 
@@ -148,15 +161,13 @@ void do_munmap(void *addr)
 			break;
 
 		off_t read_bytes = target_page->file.read_bytes;
-
 		if (pml4_is_dirty(t->pml4, upage))
-		{
+		{	
 			file_write_at(target_page->file.file, target_page->va, read_bytes, ofs);
 		}
 
 		hash_delete(&spt->spt_hash, &target_page->hash_elem);
 		vm_dealloc_page(target_page);
-
 		remain_size -= PAGE_SIZE;
 		ofs += PAGE_SIZE;
 		upage += PAGE_SIZE;

@@ -151,7 +151,7 @@ vm_get_frame(void)
 	struct frame *frame = NULL;
 	/* TODO: Fill this function. */
 
-	void *addr = palloc_get_page(PAL_USER || PAL_ZERO);
+	void *addr = palloc_get_page(PAL_USER);
 	if (addr == NULL)
 		PANIC("todo");
 
@@ -174,7 +174,7 @@ static void vm_stack_growth(void *addr UNUSED)
 	// 페이지를 찾을 때까지 루프를 돌며 스택을 확장
 	while (spt_find_page(spt, page_addr) == NULL)
 	{
-		succ = vm_alloc_page(VM_ANON||VM_MARKER_0, page_addr, true); // 새로운 페이지 할당
+		succ = vm_alloc_page(VM_ANON|VM_MARKER_0, page_addr, true); // 새로운 페이지 할당
 		if (!succ)
 			PANIC("BAAAAAM !!"); // 할당 실패 시 패닉
 		page_addr += PGSIZE;	 // 다음 페이지 주소로 이동
@@ -226,8 +226,7 @@ bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED,
 		// 스택 확장이 필요한지 검사
 		if (addr < (void *)USER_STACK &&					  // 접근 주소가 사용자 스택 내에 있고
 				addr == (void *)(f->rsp - 8) &&				  // rsp - 8보다 크거나 같으며
-				addr >= (void *)(USER_STACK - STACK_LIMIT) || // 스택 크기가 1MB 이하인 경우
-			addr > f->rsp)
+				addr >= (void *)(USER_STACK - STACK_LIMIT)) // 스택 크기가 1MB 이하인 경우)
 		{
 			vm_stack_growth(addr); // 스택 확장
 			return true;		   // 스택 확장 성공
@@ -321,6 +320,7 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
 			}
 			continue;
 		} else if (VM_TYPE(parent_type) == VM_FILE){
+			/* mmap 형식 분기처리 구현코드 (분기처리 필요 불분명) */
 			uint8_t flag = VM_FILE|VM_MARKER_1;
 			if ((parent_type & flag) == flag){
 				struct file *new_file = file_reopen(parent_page->file.file);
@@ -331,6 +331,7 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
 				}
 				continue;
 			}
+
 			// unchecked: swap in 구현시, 리팩토링 필요
 			if (!vm_alloc_page(VM_ANON, parent_page->va, parent_page->writable))
 				return false;
@@ -342,9 +343,10 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
 			child_page->type = VM_FILE;
 			memcpy(&child_page->file, &parent_page->file, sizeof(struct file_page));
 			memcpy(child_page->frame->kva, parent_page->frame->kva, PGSIZE);
+			child_page->file.file = file_reopen(parent_page->file.file);
 			continue;
 		}
-		if (!vm_alloc_page(VM_ANON | VM_MARKER_0, parent_page->va, parent_page->writable))
+		if (!vm_alloc_page(parent_type, parent_page->va, parent_page->writable))
 			return false;
 		if (!vm_claim_page(parent_page->va))
 			return false;
