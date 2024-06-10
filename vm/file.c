@@ -47,25 +47,64 @@ bool file_backed_initializer(struct page *page, enum vm_type type, void *kva)
 	return true;
 }
 
-/* Swap in the page by read contents from the file. */
+/* Swap in the page by read contents from the file. */ /* 파일 백업 페이지를 스왑 인합니다. */
 static bool
 file_backed_swap_in(struct page *page, void *kva)
 {
-	struct file_page *file_page UNUSED = &page->file;
+	struct file_page *file_page = &page->file;
+	off_t read_bytes = file_page->read_bytes;
+	off_t ofs = file_page->ofs;
+	struct file *file = file_page->file;
+
+	// 파일에서 데이터를 읽어오는 과정 디버깅 출력 추가
+	// printf("Swapping in page: kva=%p, read_bytes=%d, ofs=%d\n\n", kva, read_bytes, ofs);
+
+	if (file_read_at(file, kva, read_bytes, ofs) != (int)read_bytes)
+	{
+		// printf("File read error: expected=%d, actual=%d\n", (int)read_bytes, file_read_at(file, kva, read_bytes, ofs));
+		return false;
+	}
+
+	memset(kva + read_bytes, 0, PGSIZE - read_bytes);
+	return true;
+	// return lazy_load_segment(page, NULL);
 }
 
-/* Swap out the page by writeback contents to the file. */
+/* Swap out the page by writeback contents to the file. */ /* 파일 백업 페이지를 스왑 아웃합니다. */
 static bool
 file_backed_swap_out(struct page *page)
 {
-	struct file_page *file_page UNUSED = &page->file;
-	// struct thread *t = thread_current();
+	if (page == NULL)
+		return false;
 
-	// if (pml4_is_dirty(t->pml4, page->va))
-	// {
-	// 	// 페이지가 더럽다면 파일에 변경 내용을 기록
-	// 	file_write_at(file_page->file, page->va, file_page->read_bytes, file_page->ofs);
-	// }
+	struct file_page *file_page UNUSED = &page->file;
+	off_t read_bytes = file_page->read_bytes;
+	off_t ofs = file_page->ofs;
+	struct file *file = file_page->file;
+
+	struct thread *t = thread_current();
+
+	if (&page->file != NULL && page->writable != NULL && pml4_is_dirty(t->pml4, page->va))
+	{
+		off_t written_bytes = PGSIZE < page->file.read_bytes ? PGSIZE : page->file.read_bytes;
+		off_t written = file_write_at(&page->file, page->va, written_bytes, page->file.ofs);
+
+		// printf("File written: kva=%p, read_bytes=%d, ofs=%d\n", page->va, read_bytes, ofs);
+
+		pml4_set_dirty(thread_current()->pml4, page->va, false); // 페이지가 더 이상 더럽지 않도록 설정
+	}
+
+	// printf("Swapping out page: kva=%p, read_bytes=%d, ofs=%d\n", page->frame->kva, read_bytes, ofs);
+
+	// 페이지 프레임 해제 및 페이지 테이블에서 제거
+	pml4_clear_page(t->pml4, page->va);
+	// palloc_free_page(page->frame->kva);
+
+	// 페이지의 프레임 포인터를 NULL로 설정
+	// page->frame->kva = NULL;
+	page->frame = NULL;
+
+	return true;
 }
 
 /* Destory the file backed page. PAGE will be freed by the caller. */
@@ -179,6 +218,7 @@ void do_munmap(void *addr)
 		}
 
 		// 페이지 제거 및 메모리 해제
+		// spt_remove_page(&spt, &target_page);
 		hash_delete(&spt->spt_hash, &target_page->hash_elem);
 		vm_dealloc_page(target_page);
 		remain_size -= PAGE_SIZE;

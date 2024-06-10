@@ -24,6 +24,7 @@ void vm_init(void)
 	register_inspect_intr();
 	/* DO NOT MODIFY UPPER LINES. */
 	/* TODO: Your code goes here. */
+	list_init(&frame_list); // frame_list 초기화
 }
 
 /* Get the type of the page. This function is useful if you want to know the
@@ -115,8 +116,10 @@ bool spt_insert_page(struct supplemental_page_table *spt UNUSED,
 
 void spt_remove_page(struct supplemental_page_table *spt, struct page *page)
 {
-	// hash_delete(&spt->spt_hash, &page->hash_elem);
-	vm_dealloc_page(page);
+	// list_remove(&page->frame->frame_elem);
+	hash_delete(&spt->spt_hash, &page->hash_elem);
+	// palloc_free_page(page);
+	// vm_dealloc_page(page);
 	return true;
 }
 
@@ -126,7 +129,10 @@ vm_get_victim(void)
 {
 	struct frame *victim = NULL;
 	/* TODO: The policy for eviction is up to you. */
-
+	if (!list_empty(&frame_list))
+	{
+		victim = list_entry(list_pop_front(&frame_list), struct frame, frame_elem); // FIFO 알고리즘 사용
+	}
 	return victim;
 }
 
@@ -138,7 +144,19 @@ vm_evict_frame(void)
 	struct frame *victim UNUSED = vm_get_victim();
 	/* TODO: swap out the victim and return the evicted frame. */
 
-	return NULL;
+	if (victim == NULL)
+		return NULL;
+
+	/* TODO: swap out the victim and return the evicted frame. */
+	swap_out(victim->page);
+	// victim->page = NULL;
+
+	// printf("victim : %p, victim kva : %d, victim page : %p\n", victim, victim->kva, victim->page);
+
+	// 프레임을 frame_list에서 제거
+	list_remove(&victim->frame_elem);
+
+	return victim;
 }
 
 /* palloc() and get frame. If there is no available page, evict the page
@@ -151,13 +169,18 @@ vm_get_frame(void)
 	struct frame *frame = NULL;
 	/* TODO: Fill this function. */
 
-	void *addr = palloc_get_page(PAL_USER);
-	if (addr == NULL)
-		PANIC("todo");
+	void *kva = palloc_get_page(PAL_USER); // user pool에서 새로운 physical page를 가져온다.
+	if (kva == NULL)
+	{
+		/* 스왑을 구현할 수 있는 경우를 여기에 추가 */
+		struct frame *victim = vm_evict_frame();
+		// victim->page = NULL;
+		return victim;
+	}
 
-	frame = calloc(sizeof(struct frame), 1);
-
-	frame->kva = addr;
+	frame = calloc(sizeof(struct frame), 1); // 프레임 할당
+	frame->kva = kva;
+	// list_push_back(&frame_list, &frame->frame_elem); // 프레임을 리스트에 추가 // do_claim으로 옮김
 
 	ASSERT(frame != NULL);
 	ASSERT(frame->page == NULL);
@@ -274,8 +297,14 @@ vm_do_claim_page(struct page *page)
 	page->is_loaded = true;
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
 	struct thread *cur_t = thread_current();
-	pml4_set_page(cur_t->pml4, page->va, frame->kva, page->writable);
-	return swap_in(page, frame->kva);
+	if (!pml4_set_page(cur_t->pml4, page->va, frame->kva, page->writable))
+	{
+		printf("Failed to set page table entry: va=%p, kva=%p\n", page->va, frame->kva);
+		return false;
+	}
+	list_push_back(&frame_list, &frame->frame_elem); // 프레임을 리스트에 추가
+
+	return swap_in(page, frame->kva); // 페이지 내용을 스왑인
 }
 
 /* Initialize new supplemental page table */

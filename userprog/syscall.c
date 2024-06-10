@@ -583,7 +583,9 @@ void close(int fd)
 	struct file *f = get_file_from_fdt(fd);
 	if (f)
 	{
+		lock_acquire(&filesys_lock);
 		file_close(f); // 파일을 닫습니다.
+		lock_release(&filesys_lock);
 		// thread_current()->fd_table[fd] = NULL; // 파일 디스크립터 테이블에서 파일 포인터를 제거합니다.
 		remove_file_from_fdt(fd);
 	}

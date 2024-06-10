@@ -474,7 +474,7 @@ void process_exit(void)
 	}
 	// file_close(curr->run_file); // 현재 실행 중인 파일을 닫는다. // for rox- (실행중에 수정 못하도록)
 	// curr->run_file = NULL;
-	
+
 	// Notify parent that we are exiting. /* 부모에게 종료 상태를 알려줍니다. */
 	sema_up(&curr->wait_sema); // 자식 스레드가 종료될 때 대기하고 있는 부모에게 signal을 보낸다. // 종료되었다고 기다리고 있는 부모 thread에게 signal 보냄-> sema_up에서 val을 올려줌
 
@@ -903,8 +903,7 @@ install_page(void *upage, void *kpage, bool writable)
  * If you want to implement the function for only project 2, implement it on the
  * upper block. */
 
-bool
-lazy_load_segment(struct page *page, void *aux)
+bool lazy_load_segment(struct page *page, void *aux)
 {
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
@@ -914,6 +913,7 @@ lazy_load_segment(struct page *page, void *aux)
 		return false;
 	memset(page->va + info->read_bytes, 0, info->zero_bytes);
 	pml4_set_dirty(thread_current()->pml4, page->va, false);
+	// list_push_back(&thread_current()->swap_in_pages, &page->frame->frame_elem);
 	return true;
 }
 

@@ -92,10 +92,13 @@ struct page_info_transmitter
 /* The representation of "frame" */
 struct frame
 {
-	// unchecked :멤버번수 추가
-	void *kva;
-	struct page *page;
+	void *kva;					 // 커널 가상 주소
+	struct page *page;			 // 연결된 페이지
+	struct list_elem frame_elem; // 리스트 원소
 };
+
+// 전역 변수로 프레임 리스트 선언
+struct list frame_list;
 
 /* The function table for page operations.
  * This is one way of implementing "interface" in C.
@@ -149,4 +152,5 @@ enum vm_type page_get_type(struct page *page);
 
 // 작성 함수
 void spt_destory(struct hash_elem *hash_elem, void *aux UNUSED);
+
 #endif /* VM_VM_H */
