@@ -172,6 +172,8 @@ struct thread
 	int exit_status; /* 프로세스의 종료 상태 */ // _exit(), _wait() 구현 때 사용
 
 	/* project 3 VM */
+	// struct list swap_in_pages;
+
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4; /* Page map level 4 */

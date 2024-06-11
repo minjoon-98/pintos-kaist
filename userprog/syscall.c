@@ -16,6 +16,7 @@
 #include "threads/palloc.h"
 #include "devices/input.h"
 #include "userprog/process.h"
+#include "threads/mmu.h"
 #include "vm/vm.h"
 
 void syscall_entry(void);
@@ -166,7 +167,6 @@ void check_address(void *addr)
 	if (addr == NULL || !is_user_vaddr(addr) || spt_find_page(spt, pg_round_down(addr)) == NULL)
 	{
 		// 잘못된 접근일 경우 프로세스 종료
-		// printf("용의자 1");
 		exit(-1);
 	}
 }
@@ -354,8 +354,12 @@ bool create(const char *file, unsigned initial_size)
 	/* 파일 이름과 크기에 해당하는 파일 생성 */
 	/* 파일 생성 성공 시 true 반환, 실패 시 false 반환 */
 	check_address((void *)file);
-	// 실제 파일 시스템 호출로 변경 필요
-	return filesys_create(file, initial_size);
+
+	// lock_acquire(&filesys_lock); // ADD: filesys_lock at file system
+	bool succ = filesys_create(file, initial_size);
+	// lock_release(&filesys_lock); // ADD: filesys_lock at file system
+
+	return succ;
 }
 
 /**
@@ -374,8 +378,12 @@ bool remove(const char *file)
 	/* 파일 이름에 해당하는 파일을 제거 */
 	/* 파일 제거 성공 시 true 반환, 실패 시 false 반환 */
 	check_address((void *)file);
-	// 실제 파일 시스템 호출로 변경 필요
-	return filesys_remove(file);
+
+	// lock_acquire(&filesys_lock); // ADD: filesys_lock at file system
+	bool succ = filesys_remove(file);
+	// lock_release(&filesys_lock); // ADD: filesys_lock at file system
+
+	return succ;
 }
 
 /**
@@ -386,10 +394,13 @@ bool remove(const char *file)
  */
 int open(const char *file)
 {
-	check_address(file);				 // 주어진 파일 이름 주소가 유효한지 확인합니다.
+	check_address(file); // 주어진 파일 이름 주소가 유효한지 확인합니다.
+
+	// lock_acquire(&filesys_lock);		 // ADD: filesys_lock at file system
 	struct file *f = filesys_open(file); // 파일 시스템에서 파일을 엽니다.
 	if (!f)
 	{
+		// lock_release(&filesys_lock); // ADD: filesys_lock at file system
 		return -1; // 파일을 열 수 없는 경우 -1을 반환합니다.
 	}
 	// int fd = thread_current()->next_fd++; // 다음 파일 디스크립터를 가져오고 증가시킵니다.
@@ -398,6 +409,7 @@ int open(const char *file)
 	int fd = add_file_to_fdt(f);
 	if (fd == -1)
 		file_close(f);
+	// lock_release(&filesys_lock); // ADD: filesys_lock at file system
 	return fd;
 }
 
@@ -411,11 +423,15 @@ int filesize(int fd)
 {
 	// struct file *f = thread_current()->fd_table[fd]; // 파일 디스크립터 테이블에서 파일 포인터를 가져옵니다.
 	struct file *f = get_file_from_fdt(fd);
+
 	if (!f)
-	{
 		return -1; // 파일이 열려 있지 않은 경우 -1을 반환합니다.
-	}
-	return file_length(f); // 파일의 길이를 반환합니다.
+
+	// lock_acquire(&filesys_lock);   // ADD: filesys_lock at file system
+	off_t length = file_length(f); // 파일의 길이를 반환합니다.
+	// lock_release(&filesys_lock);   // ADD: filesys_lock at file system
+
+	return length;
 }
 
 /**
@@ -543,7 +559,9 @@ void seek(int fd, unsigned position)
 		// {
 		// 	return;
 		// }
+		// lock_acquire(&filesys_lock); // ADD: filesys_lock at file system
 		file_seek(f, position); // 파일의 위치를 지정한 위치로 이동합니다.
+								// lock_release(&filesys_lock); // ADD: filesys_lock at file system
 	}
 }
 
@@ -563,7 +581,10 @@ unsigned tell(int fd)
 		// {
 		// 	return;
 		// }
-		return file_tell(f); // 파일의 현재 위치를 반환합니다.
+		// lock_acquire(&filesys_lock); // ADD: filesys_lock at file system
+		off_t loc = file_tell(f); // 파일의 현재 위치를 반환합니다.
+		// lock_release(&filesys_lock); // ADD: filesys_lock at file system
+		return loc;
 	}
 	return -1; // 파일이 열려 있지 않은 경우 -1을 반환합니다.
 }
@@ -583,7 +604,9 @@ void close(int fd)
 	struct file *f = get_file_from_fdt(fd);
 	if (f)
 	{
+		// lock_acquire(&filesys_lock); // ADD: filesys_lock at file system
 		file_close(f); // 파일을 닫습니다.
+		// lock_release(&filesys_lock); // ADD: filesys_lock at file system
 		// thread_current()->fd_table[fd] = NULL; // 파일 디스크립터 테이블에서 파일 포인터를 제거합니다.
 		remove_file_from_fdt(fd);
 	}
@@ -608,12 +631,12 @@ void close(int fd)
 void *mmap(void *addr, size_t length, int writable, int fd, off_t offset)
 {
 	// 유효성 검사: NULL 주소, 커널 주소, 페이지 정렬되지 않은 주소, 잘못된 길이, 잘못된 오프셋
-	if( addr == NULL||
+	if (addr == NULL ||
 		is_kernel_vaddr(addr) ||
-      	(pg_round_down(addr) != addr) ||
-      	length >= KERN_BASE ||
-      	(pg_round_down(offset) != offset))
-      	return NULL;
+		(pg_round_down(addr) != addr) ||
+		length >= KERN_BASE ||
+		(pg_round_down(offset) != offset))
+		return NULL;
 
 	// 콘솔 입출력 파일 디스크립터 확인
 	if (fd == STDIN_FILENO || fd == STDOUT_FILENO)
@@ -629,7 +652,9 @@ void *mmap(void *addr, size_t length, int writable, int fd, off_t offset)
 		exit(-1);
 
 	// 파일 재개방
+	// lock_acquire(&filesys_lock); // ADD: filesys_lock at file system
 	struct file *reopen_file = file_reopen(f);
+	// lock_release(&filesys_lock); // ADD: filesys_lock at file system
 
 	// do_mmap 함수를 호출하여 메모리 매핑 수행
 	return do_mmap(addr, length, writable, reopen_file, offset);

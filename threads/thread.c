@@ -730,6 +730,7 @@ init_thread(struct thread *t, const char *name, int priority)
 	t->next_fd = 2;
 
 	/* project 3 VM */
+	// list_init(&t->swap_in_pages);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should

@@ -84,7 +84,7 @@ initd(void *f_name)
 
 	process_init();
 
-	lock_init(&filesys_lock); // init lock to avoid race condition protect filesystem
+	// lock_init(&filesys_lock); // init lock to avoid race condition protect filesystem
 
 	if (process_exec(f_name) < 0)
 		PANIC("Fail to launch initd\n");
@@ -235,6 +235,8 @@ __do_fork(void *aux)
 	 * TODO:       from the fork() until this function successfully duplicates
 	 * TODO:       the resources of parent.*/
 
+	// lock_acquire(&filesys_lock); // ADD: filesys_lock at file system
+
 	/* Duplicate file descriptors */ /* 파일 디스크립터 복제 */
 	for (int fd = 2; fd < MAX_FILES; fd++)
 	{
@@ -245,6 +247,9 @@ __do_fork(void *aux)
 				goto error;
 		}
 	}
+
+	// lock_release(&filesys_lock); // ADD: filesys_lock at file system
+
 	current->next_fd = parent->next_fd; // next_fd도 복제
 
 	// /* Notify parent that fork is successful */
@@ -453,6 +458,7 @@ void process_exit(void)
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
 
+	// lock_acquire(&filesys_lock); // ADD: filesys_lock at file system
 	// Close all open file descriptors. /* 모든 파일 디스크립터를 닫습니다. */
 	for (int fd = 2; fd < MAX_FILES; fd++)
 	{
@@ -462,6 +468,7 @@ void process_exit(void)
 			curr->fd_table[fd] = NULL;
 		}
 	}
+	// lock_release(&filesys_lock); // ADD: filesys_lock at file system
 
 	palloc_free_page(curr->fd_table);
 	// palloc_free_multiple(curr->fd_table, 2); // for multi-oom(메모리 누수) fd 0,1 은 stdin, stdout
@@ -469,12 +476,14 @@ void process_exit(void)
 	// Close the running file.
 	if (curr->run_file != NULL)
 	{
+		// lock_acquire(&filesys_lock); // ADD: filesys_lock at file system
 		file_close(curr->run_file);
+		// lock_release(&filesys_lock); // ADD: filesys_lock at file system
 		curr->run_file = NULL;
 	}
 	// file_close(curr->run_file); // 현재 실행 중인 파일을 닫는다. // for rox- (실행중에 수정 못하도록)
 	// curr->run_file = NULL;
-	
+
 	// Notify parent that we are exiting. /* 부모에게 종료 상태를 알려줍니다. */
 	sema_up(&curr->wait_sema); // 자식 스레드가 종료될 때 대기하고 있는 부모에게 signal을 보낸다. // 종료되었다고 기다리고 있는 부모 thread에게 signal 보냄-> sema_up에서 val을 올려줌
 
@@ -649,6 +658,8 @@ load(const char *file_name, struct intr_frame *if_)
 		goto done;
 	process_activate(thread_current());
 
+	// lock_acquire(&filesys_lock); // ADD: filesys_lock at file system
+
 	/* Open executable file. */
 	file = filesys_open(file_name);
 	if (file == NULL)
@@ -745,6 +756,7 @@ load(const char *file_name, struct intr_frame *if_)
 done:
 	/* We arrive here whether the load is successful or not. */
 	// file_close(file); // load에서 file_close(file)을 해주면 file이 닫히면서 lock이 풀리게 된다. 따라서 load에서 닫지 말고 process_exit에서 닫아줌
+	// lock_release(&filesys_lock); // ADD: filesys_lock at file system
 	return success;
 }
 
@@ -903,8 +915,7 @@ install_page(void *upage, void *kpage, bool writable)
  * If you want to implement the function for only project 2, implement it on the
  * upper block. */
 
-bool
-lazy_load_segment(struct page *page, void *aux)
+bool lazy_load_segment(struct page *page, void *aux)
 {
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
@@ -914,6 +925,7 @@ lazy_load_segment(struct page *page, void *aux)
 		return false;
 	memset(page->va + info->read_bytes, 0, info->zero_bytes);
 	pml4_set_dirty(thread_current()->pml4, page->va, false);
+	// list_push_back(&frame_list, &page->frame->frame_elem);
 	return true;
 }
 
@@ -962,7 +974,7 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 		// printf("page_read_bytes : %d \n", page_read_bytes);
 		// printf("page_zero_bytes : %d \n", page_zero_bytes);
 
-		if (!vm_alloc_page_with_initializer(VM_FILE, upage,
+		if (!vm_alloc_page_with_initializer(VM_ANON, upage,
 											writable, lazy_load_segment, aux))
 		{
 			free(aux);
