@@ -145,10 +145,14 @@ void syscall_handler(struct intr_frame *f UNUSED)
 		close((int)f->R.rdi);
 		break;
 	case SYS_MMAP:
+		lock_acquire(&filesys_lock); // ADD: filesys_lock at file system
 		f->R.rax = mmap((void *)f->R.rdi, (size_t)f->R.rsi, (int)f->R.rdx, (struct file *)f->R.r10, (off_t)f->R.r8);
+		lock_release(&filesys_lock); // ADD: filesys_lock at file system
 		break;
 	case SYS_MUNMAP:
+		lock_acquire(&filesys_lock); // ADD: filesys_lock at file system
 		munmap((void *)f->R.rdi);
+		lock_release(&filesys_lock); // ADD: filesys_lock at file system
 		break;
 	// case SYS_DUP2: /* 구현 실패... */
 	// 	dup2((int)f->R.rdi, (int)f->R.rsi);
@@ -317,7 +321,6 @@ int exec(const char *cmd_line)
 	{
 		// 메모리 할당에 실패하면 상태 -1로 프로세스를 종료합니다.
 		palloc_free_page(cl_copy);
-		// printf("용의자 2");
 		exit(-1);
 	}
 
@@ -327,7 +330,6 @@ int exec(const char *cmd_line)
 	// 실행에 실패하면 상태 -1로 프로세스를 종료합니다.
 	if (process_exec(cl_copy) == -1)
 	{
-		// printf("용의자 3");
 		exit(-1);
 	}
 }
@@ -355,9 +357,9 @@ bool create(const char *file, unsigned initial_size)
 	/* 파일 생성 성공 시 true 반환, 실패 시 false 반환 */
 	check_address((void *)file);
 
-	// lock_acquire(&filesys_lock); // ADD: filesys_lock at file system
+	lock_acquire(&filesys_lock); // ADD: filesys_lock at file system
 	bool succ = filesys_create(file, initial_size);
-	// lock_release(&filesys_lock); // ADD: filesys_lock at file system
+	lock_release(&filesys_lock); // ADD: filesys_lock at file system
 
 	return succ;
 }
@@ -379,9 +381,9 @@ bool remove(const char *file)
 	/* 파일 제거 성공 시 true 반환, 실패 시 false 반환 */
 	check_address((void *)file);
 
-	// lock_acquire(&filesys_lock); // ADD: filesys_lock at file system
+	lock_acquire(&filesys_lock); // ADD: filesys_lock at file system
 	bool succ = filesys_remove(file);
-	// lock_release(&filesys_lock); // ADD: filesys_lock at file system
+	lock_release(&filesys_lock); // ADD: filesys_lock at file system
 
 	return succ;
 }
@@ -396,11 +398,11 @@ int open(const char *file)
 {
 	check_address(file); // 주어진 파일 이름 주소가 유효한지 확인합니다.
 
-	// lock_acquire(&filesys_lock);		 // ADD: filesys_lock at file system
+	lock_acquire(&filesys_lock);		 // ADD: filesys_lock at file system
 	struct file *f = filesys_open(file); // 파일 시스템에서 파일을 엽니다.
+	lock_release(&filesys_lock);		 // ADD: filesys_lock at file system
 	if (!f)
 	{
-		// lock_release(&filesys_lock); // ADD: filesys_lock at file system
 		return -1; // 파일을 열 수 없는 경우 -1을 반환합니다.
 	}
 	// int fd = thread_current()->next_fd++; // 다음 파일 디스크립터를 가져오고 증가시킵니다.
@@ -409,7 +411,6 @@ int open(const char *file)
 	int fd = add_file_to_fdt(f);
 	if (fd == -1)
 		file_close(f);
-	// lock_release(&filesys_lock); // ADD: filesys_lock at file system
 	return fd;
 }
 
@@ -427,9 +428,9 @@ int filesize(int fd)
 	if (!f)
 		return -1; // 파일이 열려 있지 않은 경우 -1을 반환합니다.
 
-	// lock_acquire(&filesys_lock);   // ADD: filesys_lock at file system
+	lock_acquire(&filesys_lock);   // ADD: filesys_lock at file system
 	off_t length = file_length(f); // 파일의 길이를 반환합니다.
-	// lock_release(&filesys_lock);   // ADD: filesys_lock at file system
+	lock_release(&filesys_lock);   // ADD: filesys_lock at file system
 
 	return length;
 }
@@ -447,14 +448,12 @@ int read(int fd, void *buffer, unsigned size)
 	if (buffer == NULL || !is_user_vaddr(buffer))
 	{
 		// 잘못된 접근일 경우 프로세스 종료
-		// printf("용의자 1");
 		exit(-1);
 	} // 주어진 버퍼 주소가 유효한지 확인합니다.
 
 	/* 버퍼가 할당된 프레임이 writable이 아니면 exit(-1) */
 	struct page *found = spt_find_page(&thread_current()->spt, pg_round_down(buffer));
 	if (found != NULL && found->writable == false)
-		// printf("용의자 4");
 		exit(-1);
 
 	off_t read_byte;
@@ -559,9 +558,9 @@ void seek(int fd, unsigned position)
 		// {
 		// 	return;
 		// }
-		// lock_acquire(&filesys_lock); // ADD: filesys_lock at file system
-		file_seek(f, position); // 파일의 위치를 지정한 위치로 이동합니다.
-								// lock_release(&filesys_lock); // ADD: filesys_lock at file system
+		lock_acquire(&filesys_lock); // ADD: filesys_lock at file system
+		file_seek(f, position);		 // 파일의 위치를 지정한 위치로 이동합니다.
+		lock_release(&filesys_lock); // ADD: filesys_lock at file system
 	}
 }
 
@@ -581,9 +580,9 @@ unsigned tell(int fd)
 		// {
 		// 	return;
 		// }
-		// lock_acquire(&filesys_lock); // ADD: filesys_lock at file system
-		off_t loc = file_tell(f); // 파일의 현재 위치를 반환합니다.
-		// lock_release(&filesys_lock); // ADD: filesys_lock at file system
+		lock_acquire(&filesys_lock); // ADD: filesys_lock at file system
+		off_t loc = file_tell(f);	 // 파일의 현재 위치를 반환합니다.
+		lock_release(&filesys_lock); // ADD: filesys_lock at file system
 		return loc;
 	}
 	return -1; // 파일이 열려 있지 않은 경우 -1을 반환합니다.
@@ -653,9 +652,9 @@ void *mmap(void *addr, size_t length, int writable, int fd, off_t offset)
 
 	// 파일 재개방
 	struct file *reopen_file = file_reopen(f);
-	lock_acquire(&filesys_lock); // ADD: filesys_lock at file system
+	// lock_acquire(&filesys_lock); // ADD: filesys_lock at file system
 	void *result = do_mmap(addr, length, writable, reopen_file, offset);
-	lock_release(&filesys_lock); // ADD: filesys_lock at file system
+	// lock_release(&filesys_lock); // ADD: filesys_lock at file system
 	// do_mmap 함수를 호출하여 메모리 매핑 수행
 	return result;
 }
@@ -675,10 +674,10 @@ void munmap(void *addr)
 	struct page *page = spt_find_page(&thread_current()->spt, addr);
 	if (!page || page->operations->type != VM_FILE)
 		return;
-	lock_acquire(&filesys_lock); // ADD: filesys_lock at file system
+	// lock_acquire(&filesys_lock); // ADD: filesys_lock at file system
 	// do_munmap 함수를 호출하여 매핑 해제 수행
 	do_munmap(addr);
-	lock_release(&filesys_lock); // ADD: filesys_lock at file system
+	// lock_release(&filesys_lock); // ADD: filesys_lock at file system
 }
 
 // /**

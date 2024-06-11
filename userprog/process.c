@@ -84,7 +84,7 @@ initd(void *f_name)
 
 	process_init();
 
-	// lock_init(&filesys_lock); // init lock to avoid race condition protect filesystem
+	// lock_init(&load_lock);
 
 	if (process_exec(f_name) < 0)
 		PANIC("Fail to launch initd\n");
@@ -221,7 +221,19 @@ __do_fork(void *aux)
 	process_activate(current); // tss를 업데이트 해준다.
 #ifdef VM
 	supplemental_page_table_init(&current->spt);
-	if (!supplemental_page_table_copy(&current->spt, &parent->spt))
+	bool lock = false;
+	if (!lock_held_by_current_thread(&filesys_lock))
+	{
+		lock_acquire(&filesys_lock); // ADD: filesys_lock at file system
+		lock = true;
+	}
+	bool copy = supplemental_page_table_copy(&current->spt, &parent->spt);
+	if (lock)
+	{
+		lock_release(&filesys_lock); // ADD: filesys_lock at file system
+		lock = false;
+	}
+	if (!copy)
 		goto error;
 #else
 	if (!pml4_for_each(parent->pml4, duplicate_pte, parent))
@@ -321,7 +333,13 @@ int process_exec(void *f_name)
 	/* And then load the binary */ /* 바이너리를 로드합니다. */
 	// success = load(file_name, &_if);
 	/* 실행 파일 이름을 load 함수의 첫 번째 인자로 전달합니다. */
+
+	// lock_acquire(&load_lock); // ADD: load_lock
+	lock_acquire(&filesys_lock); // ADD: filesys_lock at file system
 	success = load(argv[0], &_if);
+	lock_release(&filesys_lock); // ADD: filesys_lock at file system
+	// lock_release(&load_lock); // ADD: load_lock
+
 	/* If load failed, quit. */ /* 로드에 실패하면 종료합니다. */
 	if (!success)
 	{
@@ -484,15 +502,15 @@ void process_exit(void)
 	// file_close(curr->run_file); // 현재 실행 중인 파일을 닫는다. // for rox- (실행중에 수정 못하도록)
 	// curr->run_file = NULL;
 
+	// Clean up process resources.
+	process_cleanup(); // pml4를 해제(이 함수를 call 한 thread의 pml4)
+	// 🚨 위치 변경 exit을 할 때, 부모보다 먼저 종료된 후에 부모를 깨워준다...? 🫠
+
 	// Notify parent that we are exiting. /* 부모에게 종료 상태를 알려줍니다. */
 	sema_up(&curr->wait_sema); // 자식 스레드가 종료될 때 대기하고 있는 부모에게 signal을 보낸다. // 종료되었다고 기다리고 있는 부모 thread에게 signal 보냄-> sema_up에서 val을 올려줌
 
-	process_cleanup(); // pml4를 해제(이 함수를 call 한 thread의 pml4)
-
 	// Wait for parent to acknowledge exit.
 	sema_down(&curr->exit_sema); // 자식 스레드가 완료되었음을 알리는 세마포어를 사용합니다. // 부모의 signal을 기다린다. 대기가 풀리고 나서 do_schedule(THREAD_DYING)이 이어져 다른 스레드가 실행된다. // 부모의 exit_Status가 정확히 전달되었는지 확인(wait)
-
-	// Clean up process resources.
 }
 
 /* Free the current process's resources. */
@@ -658,8 +676,6 @@ load(const char *file_name, struct intr_frame *if_)
 		goto done;
 	process_activate(thread_current());
 
-	// lock_acquire(&filesys_lock); // ADD: filesys_lock at file system
-
 	/* Open executable file. */
 	file = filesys_open(file_name);
 	if (file == NULL)
@@ -756,7 +772,6 @@ load(const char *file_name, struct intr_frame *if_)
 done:
 	/* We arrive here whether the load is successful or not. */
 	// file_close(file); // load에서 file_close(file)을 해주면 file이 닫히면서 lock이 풀리게 된다. 따라서 load에서 닫지 말고 process_exit에서 닫아줌
-	// lock_release(&filesys_lock); // ADD: filesys_lock at file system
 	return success;
 }
 

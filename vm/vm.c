@@ -9,6 +9,7 @@
 #include "string.h"
 #include "threads/pte.h"
 #include "threads/mmu.h"
+#include "userprog/process.h"
 
 static const int STACK_LIMIT = (1 << 20); // 1MB
 
@@ -263,7 +264,20 @@ bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED,
 		{
 			return false;
 		}
-		return vm_claim_page(page_addr); // 페이지 클레임
+
+		bool lock = false;
+		if (!lock_held_by_current_thread(&filesys_lock))
+		{
+			lock_acquire(&filesys_lock); // ADD: filesys_lock at file system
+			lock = true;
+		}
+		bool succ = vm_claim_page(page_addr); // 페이지 클레임
+		if (lock)
+		{
+			lock_release(&filesys_lock); // ADD: filesys_lock at file system
+			lock = false;
+		}
+		return succ;
 	}
 }
 
@@ -412,7 +426,18 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
 /* Free the resource hold by the supplemental page table */
 void supplemental_page_table_kill(struct supplemental_page_table *spt UNUSED)
 {
+	bool lock = false;
+	if (!lock_held_by_current_thread(&filesys_lock))
+	{
+		lock_acquire(&filesys_lock); // ADD: filesys_lock at file system
+		lock = true;
+	}
 	hash_clear(&spt->spt_hash, spt_destory);
+	if (lock)
+	{
+		lock_release(&filesys_lock); // ADD: filesys_lock at file system
+		lock = false;
+	}
 }
 
 bool page_table_entry_less_function(struct hash_elem *a, struct hash_elem *b, void *aux UNUSED)
