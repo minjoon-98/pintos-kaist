@@ -93,12 +93,11 @@ err:
 /* Find VA from spt and return page. On error, return NULL. */
 struct page *spt_find_page(struct supplemental_page_table *spt, void *va)
 {
-	struct page *page;
+	struct page page;
 	struct hash_elem *found_elem;
-	page = (struct page *)malloc(sizeof(struct page));
-	page->va = va;
+	page.va = pg_round_down(va);
 
-	found_elem = hash_find(&spt->spt_hash, &page->hash_elem);
+	found_elem = hash_find(&spt->spt_hash, &page.hash_elem);
 	if (found_elem != NULL)
 	{
 		return hash_entry(found_elem, struct page, hash_elem);
@@ -154,7 +153,7 @@ vm_evict_frame(void)
 	// printf("victim : %p, victim kva : %d, victim page : %p\n", victim, victim->kva, victim->page);
 
 	// 프레임을 frame_list에서 제거
-	list_remove(&victim->frame_elem);
+	// list_remove(&victim->frame_elem);
 
 	return victim;
 }
@@ -248,7 +247,7 @@ bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED,
 
 		// 스택 확장이 필요한지 검사
 		if (addr < (void *)USER_STACK &&				// 접근 주소가 사용자 스택 내에 있고
-			addr == (void *)(f->rsp - 8) &&				// rsp - 8보다 크거나 같으며
+			addr >= (void *)(f->rsp - 8) &&				// rsp - 8보다 크거나 같으며
 			addr >= (void *)(USER_STACK - STACK_LIMIT)) // 스택 크기가 1MB 이하인 경우)
 		{
 			vm_stack_growth(addr); // 스택 확장

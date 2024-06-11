@@ -3,6 +3,7 @@
 #include "vm/vm.h"
 #include "devices/disk.h"
 #include "threads/vaddr.h"
+#include "threads/mmu.h"
 #include "lib/kernel/bitmap.h"
 
 /* DO NOT MODIFY BELOW LINE */
@@ -39,13 +40,13 @@ void vm_anon_init(void)
 		PANIC("No swap disk found!");
 	}
 
-	size_t swap_size = disk_size(swap_disk) / SECTORS_PER_PAGE;
-	swap_bitmap = bitmap_create(swap_size);
+	int swap_pages = disk_size(swap_disk) / SECTORS_PER_PAGE;
+	swap_bitmap = bitmap_create(swap_pages);
 	if (swap_bitmap == NULL)
 	{
 		PANIC("Swap bitmap creation failed!");
 	}
-
+	bitmap_set_all(swap_bitmap, 0);
 	lock_init(&swap_lock);
 }
 
@@ -61,24 +62,30 @@ bool anon_initializer(struct page *page, enum vm_type type, void *kva)
 
 	memset(anon_page, 0, sizeof(*anon_page));
 
-	anon_page->swap_slot = BITMAP_ERROR; // 스왑 슬롯을 유효하지 않은 값으로 초기화
+	anon_page->swap_slot = -1; // 스왑 슬롯을 유효하지 않은 값으로 초기화
 	return true;
 }
 
-/* Swap in the page by read contents from the swap disk. */ /* 익명 페이지를 스왑 디스크에서 스왑 인합니다. */
+/* Swap in the page by read contents from the swap disk. */
+/* 익명 페이지를 스왑 디스크에서 스왑 인합니다. */
 static bool
 anon_swap_in(struct page *page, void *kva)
 {
 	struct anon_page *anon_page = &page->anon;
 	size_t swap_index = anon_page->swap_slot;
 
-	if (swap_index == BITMAP_ERROR)
+	if (swap_index == -1)
 		return false;
 
 	lock_acquire(&swap_lock);
 
 	if (bitmap_test(swap_bitmap, swap_index) == false)
+	{
+		lock_release(&swap_lock);
 		return false;
+	}
+
+	// printf("ANON Swapping in page: kva=%p, swap_slot=%zu\n\n", kva, swap_index); // debug by minjoon
 
 	/* 스왑 슬롯에서 페이지를 읽습니다. */
 	for (size_t i = 0; i < SECTORS_PER_PAGE; i++)
@@ -86,13 +93,18 @@ anon_swap_in(struct page *page, void *kva)
 		disk_read(swap_disk, swap_index * SECTORS_PER_PAGE + i, (void *)(uint8_t *)kva + i * DISK_SECTOR_SIZE);
 	}
 
+	// printf("---------------------------------\n");// debug by jageon
+	// bitmap_dump(swap_bitmap);// debug by jageon
 	bitmap_flip(swap_bitmap, swap_index);
+	// printf("---------------------------------\n");// debug by jageon
+	// bitmap_dump(swap_bitmap);// debug by jageon
 
 	lock_release(&swap_lock);
 	return true;
 }
 
-/* Swap out the page by writing contents to the swap disk. */ /* 익명 페이지를 스왑 디스크로 스왑 아웃합니다. */
+/* Swap out the page by writing contents to the swap disk. */
+/* 익명 페이지를 스왑 디스크로 스왑 아웃합니다. */
 static bool
 anon_swap_out(struct page *page)
 {
@@ -107,6 +119,8 @@ anon_swap_out(struct page *page)
 		lock_release(&swap_lock);
 		PANIC("Swap space full!");
 	}
+
+	// printf("ANON Swapping out page: kva=%p, swap_slot=%zu\n", page->frame->kva, swap_slot); // debug by minjoon
 
 	/* 페이지를 스왑 슬롯에 씁니다. */
 	for (size_t i = 0; i < SECTORS_PER_PAGE; i++)
@@ -140,4 +154,5 @@ anon_destroy(struct page *page)
 		bitmap_reset(swap_bitmap, anon_page->swap_slot);
 		lock_release(&swap_lock);
 	}
+	// list_remove(&page->frame->frame_elem);
 }
