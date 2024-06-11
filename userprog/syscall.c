@@ -604,9 +604,9 @@ void close(int fd)
 	struct file *f = get_file_from_fdt(fd);
 	if (f)
 	{
-		// lock_acquire(&filesys_lock); // ADD: filesys_lock at file system
-		file_close(f); // 파일을 닫습니다.
-		// lock_release(&filesys_lock); // ADD: filesys_lock at file system
+		lock_acquire(&filesys_lock); // ADD: filesys_lock at file system
+		file_close(f);				 // 파일을 닫습니다.
+		lock_release(&filesys_lock); // ADD: filesys_lock at file system
 		// thread_current()->fd_table[fd] = NULL; // 파일 디스크립터 테이블에서 파일 포인터를 제거합니다.
 		remove_file_from_fdt(fd);
 	}
@@ -652,12 +652,12 @@ void *mmap(void *addr, size_t length, int writable, int fd, off_t offset)
 		exit(-1);
 
 	// 파일 재개방
-	// lock_acquire(&filesys_lock); // ADD: filesys_lock at file system
 	struct file *reopen_file = file_reopen(f);
-	// lock_release(&filesys_lock); // ADD: filesys_lock at file system
-
+	lock_acquire(&filesys_lock); // ADD: filesys_lock at file system
+	void *result = do_mmap(addr, length, writable, reopen_file, offset);
+	lock_release(&filesys_lock); // ADD: filesys_lock at file system
 	// do_mmap 함수를 호출하여 메모리 매핑 수행
-	return do_mmap(addr, length, writable, reopen_file, offset);
+	return result;
 }
 
 /**
@@ -675,9 +675,10 @@ void munmap(void *addr)
 	struct page *page = spt_find_page(&thread_current()->spt, addr);
 	if (!page || page->operations->type != VM_FILE)
 		return;
-
+	lock_acquire(&filesys_lock); // ADD: filesys_lock at file system
 	// do_munmap 함수를 호출하여 매핑 해제 수행
 	do_munmap(addr);
+	lock_release(&filesys_lock); // ADD: filesys_lock at file system
 }
 
 // /**
