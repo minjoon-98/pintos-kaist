@@ -448,14 +448,12 @@ int read(int fd, void *buffer, unsigned size)
 	if (buffer == NULL || !is_user_vaddr(buffer))
 	{
 		// 잘못된 접근일 경우 프로세스 종료
-		// printf("용의자 1");
 		exit(-1);
 	} // 주어진 버퍼 주소가 유효한지 확인합니다.
 
 	/* 버퍼가 할당된 프레임이 writable이 아니면 exit(-1) */
 	struct page *found = spt_find_page(&thread_current()->spt, pg_round_down(buffer));
 	if (found != NULL && found->writable == false)
-		// printf("용의자 4");
 		exit(-1);
 
 	off_t read_byte;
