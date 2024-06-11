@@ -241,7 +241,8 @@ void do_munmap(void *addr)
 		// 페이지 제거 및 메모리 해제
 		// spt_remove_page(&spt, &target_page);
 		hash_delete(&spt->spt_hash, &target_page->hash_elem);
-		vm_dealloc_page(target_page);
+		// vm_dealloc_page(target_page); // 호출자가 페이지 구조체를 free 해주기 때문에 free(page)는 필요 없음 by AruJoy
+		pml4_clear_page(t->pml4, upage); // 페이지 테이블에서 유효비트(valid bit)만 0으로 변경(메모리에 적재되지 않음을 표시)
 		remain_size -= PAGE_SIZE;
 		ofs += PAGE_SIZE;
 		upage += PAGE_SIZE;

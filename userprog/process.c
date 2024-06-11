@@ -974,8 +974,8 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 		// printf("page_read_bytes : %d \n", page_read_bytes);
 		// printf("page_zero_bytes : %d \n", page_zero_bytes);
 
-		if (!vm_alloc_page_with_initializer(VM_ANON, upage,
-											writable, lazy_load_segment, aux))
+		if (!vm_alloc_page_with_initializer(VM_ANON, upage,					   // VM_ANON으로 초기화 해야함 -> 실행 파일은 변동 가능한 데이터를 다루기 때문에
+											writable, lazy_load_segment, aux)) // VM_FILE은 .txt 파일과 같은 정적 파일들이 대상이다
 		{
 			free(aux);
 			return false;
