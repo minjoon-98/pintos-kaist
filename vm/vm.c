@@ -93,6 +93,8 @@ err:
 /* Find VA from spt and return page. On error, return NULL. */
 struct page *spt_find_page(struct supplemental_page_table *spt, void *va)
 {
+	// malloc으로 동적 할당 시, 해당 시점에 메모리를 할당하기 때문에 메모리가 꽉 차있을 때, 항당 실패 가능성이 있음.
+	// 반대로 정적 할당은 프로그램 실행 전에 stack에 공간을 미리 할당받고 시작하기에 문제를 일으키지 않음 (but 우리가 사용하는 메모리의 영역이 적어짐)
 	struct page page;
 	struct hash_elem *found_elem;
 	page.va = pg_round_down(va);

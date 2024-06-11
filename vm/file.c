@@ -59,7 +59,7 @@ file_backed_swap_in(struct page *page, void *kva)
 
 	if (file_read_at(file, kva, read_bytes, ofs) != (int)read_bytes)
 	{
-		// printf("File read error: expected=%d, actual=%d\n", (int)read_bytes, file_read_at(file, kva, read_bytes, ofs));
+		printf("File read error: expected=%d, actual=%d\n", (int)read_bytes, file_read_at(file, kva, read_bytes, ofs));
 		return false;
 	}
 
@@ -115,18 +115,22 @@ file_backed_destroy(struct page *page)
 	struct file_page *file_page UNUSED = &page->file;
 	struct thread *t = thread_current();
 
-	// 아래 코드와 file_backed_swap_out(page);가 기능이 똑같음
 	off_t read_bytes = file_page->read_bytes;
 	off_t ofs = file_page->ofs;
 	struct file *file = file_page->file;
 
 	// 페이지가 더럽다면 파일에 변경 내용을 기록
-	if (&page->file != NULL && page->writable != NULL && pml4_is_dirty(t->pml4, page->va))
+	if (file != NULL && page->writable && pml4_is_dirty(t->pml4, page->va))
 	{
-		off_t written_bytes = PGSIZE < page->file.read_bytes ? PGSIZE : page->file.read_bytes;
-		off_t written = file_write_at(&page->file, page->va, written_bytes, page->file.ofs);
+		off_t written_bytes = PGSIZE < read_bytes ? PGSIZE : read_bytes;
+		off_t written = file_write_at(file, page->va, written_bytes, ofs);
 
-		pml4_set_dirty(thread_current()->pml4, page->va, false); // 페이지가 더 이상 더럽지 않도록 설정
+		if (written != written_bytes)
+		{
+			printf("File write error in destroy: expected=%d, actual=%d\n", (int)written_bytes, (int)written);
+		}
+
+		pml4_set_dirty(t->pml4, page->va, false); // 페이지가 더 이상 더럽지 않도록 설정
 	}
 
 	// 페이지 테이블에서 제거
