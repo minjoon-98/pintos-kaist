@@ -49,22 +49,16 @@ struct page
 	struct frame *frame; /* Back reference for frame */
 
 	/* Your implementation */
-	// struct file *file_vnode;
-
-	uint8_t type;
-
+	enum vm_type type;
 	// size_t offset;
-
 	// size_t read_bytes;
 	// size_t zero_bytes;
 
-	// size_t swap_slot;
-
-	// struct list_elem mmap_elem;
 	struct hash_elem hash_elem;
 
-	bool is_loaded;
 	bool writable;
+	// bool origin_writable;
+	bool copy_on_write;
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
 	union
@@ -95,10 +89,12 @@ struct frame
 	void *kva;					 // 커널 가상 주소
 	struct page *page;			 // 연결된 페이지
 	struct list_elem frame_elem; // 리스트 원소
+	int ref_count;				 // for cow
 };
 
 // 전역 변수로 프레임 리스트 선언
 struct list frame_list;
+struct lock frame_lock;
 
 /* The function table for page operations.
  * This is one way of implementing "interface" in C.
@@ -152,5 +148,6 @@ enum vm_type page_get_type(struct page *page);
 
 // 작성 함수
 void spt_destory(struct hash_elem *hash_elem, void *aux UNUSED);
+void free_frame(struct frame *frame);
 
 #endif /* VM_VM_H */

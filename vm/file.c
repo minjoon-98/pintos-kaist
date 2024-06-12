@@ -13,6 +13,8 @@ static bool file_backed_swap_in(struct page *page, void *kva);
 static bool file_backed_swap_out(struct page *page);
 static void file_backed_destroy(struct page *page);
 
+struct lock file_swap_lock;
+
 /* DO NOT MODIFY this struct */
 static const struct page_operations file_ops = {
 	.swap_in = file_backed_swap_in,
@@ -24,6 +26,7 @@ static const struct page_operations file_ops = {
 /* The initializer of file vm */
 void vm_file_init(void)
 {
+	lock_init(&file_swap_lock);
 }
 
 /* Initialize the file backed page */
@@ -36,7 +39,7 @@ bool file_backed_initializer(struct page *page, enum vm_type type, void *kva)
 	struct page_info_transmitter *aux = page->uninit.aux;
 	struct file_page *file_page = &page->file;
 
-	// memset(file_page, 0, sizeof(*file_page));
+	memset(file_page, 0, sizeof(*file_page));
 
 	file_page->file = aux->file;
 	file_page->ofs = aux->ofs;
@@ -57,15 +60,16 @@ file_backed_swap_in(struct page *page, void *kva)
 	off_t ofs = file_page->ofs;
 	struct file *file = file_page->file;
 
+	// lock_acquire(&file_swap_lock);
 	if (file_read_at(file, kva, read_bytes, ofs) != (int)read_bytes)
 	{
 		printf("File read error: expected=%d, actual=%d\n", (int)read_bytes, file_read_at(file, kva, read_bytes, ofs));
 		return false;
 	}
+	// lock_release(&file_swap_lock);
 
 	// printf("FILE Swapping in page: kva=%p, read_bytes=%d, ofs=%d\n\n", kva, read_bytes, ofs); // debug by minjoon
 
-	list_push_back(&frame_list, &page->frame->frame_elem);
 	memset(kva + read_bytes, 0, PGSIZE - read_bytes);
 	return true;
 	// return lazy_load_segment(page, NULL);
@@ -85,6 +89,7 @@ file_backed_swap_out(struct page *page)
 
 	struct thread *t = thread_current();
 
+	// lock_acquire(&file_swap_lock);
 	if (&page->file != NULL && page->writable != NULL && pml4_is_dirty(t->pml4, page->va))
 	{
 		off_t written_bytes = PGSIZE < page->file.read_bytes ? PGSIZE : page->file.read_bytes;
@@ -94,7 +99,6 @@ file_backed_swap_out(struct page *page)
 
 		pml4_set_dirty(thread_current()->pml4, page->va, false); // 페이지가 더 이상 더럽지 않도록 설정
 	}
-
 	// printf("FILE Swapping out page: kva=%p, read_bytes=%d, ofs=%d\n", page->frame->kva, read_bytes, ofs); // debug by minjoon
 
 	// 페이지 프레임 해제 및 페이지 테이블에서 제거
@@ -102,9 +106,9 @@ file_backed_swap_out(struct page *page)
 	// palloc_free_page(page->frame->kva);
 
 	// 페이지의 프레임 포인터를 NULL로 설정
-	// page->frame->kva = NULL;
+	page->frame->kva = NULL;
 	page->frame = NULL;
-
+	// lock_release(&file_swap_lock);
 	return true;
 }
 
@@ -119,6 +123,7 @@ file_backed_destroy(struct page *page)
 	off_t ofs = file_page->ofs;
 	struct file *file = file_page->file;
 
+	// lock_acquire(&file_swap_lock);
 	// 페이지가 더럽다면 파일에 변경 내용을 기록
 	if (file != NULL && page->writable && pml4_is_dirty(t->pml4, page->va))
 	{
@@ -132,7 +137,14 @@ file_backed_destroy(struct page *page)
 
 		pml4_set_dirty(t->pml4, page->va, false); // 페이지가 더 이상 더럽지 않도록 설정
 	}
+	// lock_release(&file_swap_lock);
 
+	if (page->frame && page->frame->page == page)
+	{
+		// lock_acquire(&file_swap_lock);
+		free_frame(page->frame);
+		// lock_release(&file_swap_lock);
+	}
 	// 페이지 테이블에서 제거
 	pml4_clear_page(t->pml4, page->va);
 
@@ -141,7 +153,7 @@ file_backed_destroy(struct page *page)
 	// list_remove(&page->frame->frame_elem);
 
 	// 해시 테이블에서 제거
-	hash_delete(&t->spt.spt_hash, &page->hash_elem);
+	// hash_delete(&t->spt.spt_hash, &page->hash_elem);
 }
 
 /* Do the mmap */
@@ -195,7 +207,6 @@ do_mmap(void *addr, size_t length, int writable, struct file *file, off_t offset
 			free(aux);
 			return NULL;
 		}
-
 		upage += PAGE_SIZE;
 		ofs += read_bytes;
 		remain_size -= read_bytes;
@@ -240,11 +251,12 @@ void do_munmap(void *addr)
 
 		// 페이지 제거 및 메모리 해제
 		// spt_remove_page(&spt, &target_page);
-		hash_delete(&spt->spt_hash, &target_page->hash_elem);
-		// vm_dealloc_page(target_page); // 호출자가 페이지 구조체를 free 해주기 때문에 free(page)는 필요 없음 by AruJoy
+		// hash_delete(&spt->spt_hash, &target_page->hash_elem);
+		// vm_dealloc_page(target_page);	 // 호출자가 페이지 구조체를 free 해주기 때문에 free(page)는 필요 없음 by AruJoy
 		pml4_clear_page(t->pml4, upage); // 페이지 테이블에서 유효비트(valid bit)만 0으로 변경(메모리에 적재되지 않음을 표시)
 		remain_size -= PAGE_SIZE;
 		ofs += PAGE_SIZE;
 		upage += PAGE_SIZE;
 	}
+	file_close(&target_page->file);
 }

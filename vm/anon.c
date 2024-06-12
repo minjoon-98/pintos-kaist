@@ -46,7 +46,7 @@ void vm_anon_init(void)
 	{
 		PANIC("Swap bitmap creation failed!");
 	}
-	bitmap_set_all(swap_bitmap, 0);
+	bitmap_set_all(swap_bitmap, false);
 	lock_init(&swap_lock);
 }
 
@@ -155,4 +155,9 @@ anon_destroy(struct page *page)
 		lock_release(&swap_lock);
 	}
 	// list_remove(&page->frame->frame_elem);
+	if (page->frame && page->frame->page == page)
+	{
+		free_frame(page->frame);
+	}
+	pml4_clear_page(thread_current()->pml4, page->va);
 }

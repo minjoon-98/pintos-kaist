@@ -220,6 +220,7 @@ __do_fork(void *aux)
 
 	process_activate(current); // tss를 업데이트 해준다.
 #ifdef VM
+	current->parent_pml4 = parent->pml4;
 	supplemental_page_table_init(&current->spt);
 	bool lock = false;
 	if (!lock_held_by_current_thread(&filesys_lock))
@@ -518,9 +519,17 @@ static void
 process_cleanup(void)
 {
 	struct thread *curr = thread_current();
+	if (curr->run_file != NULL)
+	{
+		lock_acquire(&filesys_lock);
+		file_close(curr->run_file);
+		lock_release(&filesys_lock);
+		curr->run_file = NULL;
+	}
 
 #ifdef VM
 	supplemental_page_table_kill(&curr->spt);
+	return;
 #endif
 
 	uint64_t *pml4;
@@ -895,7 +904,7 @@ setup_stack(struct intr_frame *if_)
 	uint8_t *kpage;
 	bool success = false;
 
-	kpage = palloc_get_page(PAL_USER);
+	kpage = palloc_get_page(PAL_USER | PAL_ZERO);
 	if (kpage != NULL)
 	{
 		success = install_page(((uint8_t *)USER_STACK) - PGSIZE, kpage, true);
@@ -937,10 +946,12 @@ bool lazy_load_segment(struct page *page, void *aux)
 	/* TODO: VA is available when calling this function. */
 	struct page_info_transmitter *info = (struct page_info_transmitter *)aux;
 	if (file_read_at(info->file, page->va, info->read_bytes, info->ofs) != (int)info->read_bytes)
+	{
+		// palloc_free_page(page->frame->kva);
 		return false;
+	}
 	memset(page->va + info->read_bytes, 0, info->zero_bytes);
 	pml4_set_dirty(thread_current()->pml4, page->va, false);
-	// list_push_back(&frame_list, &page->frame->frame_elem);
 	return true;
 }
 

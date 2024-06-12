@@ -168,11 +168,21 @@ void syscall_handler(struct intr_frame *f UNUSED)
 void check_address(void *addr)
 {
 	struct supplemental_page_table *spt = &thread_current()->spt;
-	if (addr == NULL || !is_user_vaddr(addr) || spt_find_page(spt, pg_round_down(addr)) == NULL)
+	if (addr == NULL || !is_user_vaddr(addr))
 	{
 		// 잘못된 접근일 경우 프로세스 종료
 		exit(-1);
 	}
+}
+
+void check_buffer(uint64_t *buffer)
+{
+	struct page *p = spt_find_page(&thread_current()->spt, pg_round_down(buffer));
+	if (!p) // spt 테이블에 해당 버퍼에 대한 페이지가 없으면 프로세스 종료
+		exit(-1);
+	// if (!p->writable && !p->origin_writable)
+	if (!p->writable && !p->copy_on_write) // 읽기 권한이 없는데, copy on write가 아닐 경우 종료
+		exit(-1);
 }
 
 bool check_address_overlap(void *addr, size_t length)
@@ -316,19 +326,20 @@ int exec(const char *cmd_line)
 
 	// 명령어 줄 복사를 위한 새로운 메모리 페이지를 할당합니다.
 	char *cl_copy;
-	cl_copy = palloc_get_page(0); // page를 할당받고 해당 page에 file_name을 저장해줌
+	cl_copy = palloc_get_page(PAL_ZERO); // page를 할당받고 해당 page에 file_name을 저장해줌
 	if (cl_copy == NULL)
 	{
 		// 메모리 할당에 실패하면 상태 -1로 프로세스를 종료합니다.
 		palloc_free_page(cl_copy);
-		exit(-1);
+		// exit(-1);
+		return TID_ERROR;
 	}
 
 	// 명령어 줄을 새로 할당한 메모리 페이지에 복사합니다.
 	strlcpy(cl_copy, cmd_line, PGSIZE);
 	// 복사된 명령어 줄을 사용하여 새로운 프로세스를 실행합니다.
 	// 실행에 실패하면 상태 -1로 프로세스를 종료합니다.
-	if (process_exec(cl_copy) == -1)
+	if (process_exec(cl_copy) < 0)
 	{
 		exit(-1);
 	}
@@ -445,16 +456,8 @@ int filesize(int fd)
  */
 int read(int fd, void *buffer, unsigned size)
 {
-	if (buffer == NULL || !is_user_vaddr(buffer))
-	{
-		// 잘못된 접근일 경우 프로세스 종료
-		exit(-1);
-	} // 주어진 버퍼 주소가 유효한지 확인합니다.
-
-	/* 버퍼가 할당된 프레임이 writable이 아니면 exit(-1) */
-	struct page *found = spt_find_page(&thread_current()->spt, pg_round_down(buffer));
-	if (found != NULL && found->writable == false)
-		exit(-1);
+	check_address(buffer); // 주어진 버퍼 주소가 유효한지 확인합니다.
+	check_buffer(buffer);
 
 	off_t read_byte;
 	uint8_t *read_buffer = buffer;
@@ -466,9 +469,7 @@ int read(int fd, void *buffer, unsigned size)
 			key = input_getc();
 			*read_buffer++ = key;
 			if (key == '\0')
-			{
 				break;
-			}
 		}
 	}
 	else if (fd == STDOUT_FILENO)
@@ -480,9 +481,7 @@ int read(int fd, void *buffer, unsigned size)
 	{
 		struct file *f = get_file_from_fdt(fd);
 		if (!f)
-		{
-			return -1; // 파일이 열려 있지 않은 경우 -1을 반환합니다.
-		}
+			return -1;				 // 파일이 열려 있지 않은 경우 -1을 반환합니다.
 		lock_acquire(&filesys_lock); // file을 읽을 때 다른 프로세스의 접근을 막기 위해 lock
 		read_byte = file_read(f, buffer, size);
 		lock_release(&filesys_lock);
@@ -510,18 +509,11 @@ int read(int fd, void *buffer, unsigned size)
  */
 int write(int fd, const void *buffer, unsigned size)
 {
-	// check_address((void *)buffer); // 주어진 버퍼 주소가 유효한지 확인합니다.
-
-	if (buffer == NULL || !is_user_vaddr(buffer))
-	{
-		exit(-1);
-	}
+	check_address(buffer); // 주어진 버퍼 주소가 유효한지 확인합니다.
 
 	off_t write_byte;
 	if (fd == STDIN_FILENO)
-	{
 		return -1;
-	}
 	else if (fd == STDOUT_FILENO)
 	{
 		putbuf(buffer, size); // 표준 출력에 데이터를 씁니다.
