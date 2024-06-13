@@ -4,20 +4,19 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "kernel/hash.h"
 #include "threads/interrupt.h"
 #include "threads/synch.h"
-#include "kernel/hash.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
 
 /* States in a thread's life cycle. */
-enum thread_status
-{
-	THREAD_RUNNING, /* Running thread. */
-	THREAD_READY,	/* Not running but ready to run. */
-	THREAD_BLOCKED, /* Waiting for an event to trigger. */
-	THREAD_DYING	/* About to be destroyed. */
+enum thread_status {
+  THREAD_RUNNING, /* Running thread. */
+  THREAD_READY,   /* Not running but ready to run. */
+  THREAD_BLOCKED, /* Waiting for an event to trigger. */
+  THREAD_DYING    /* About to be destroyed. */
 };
 
 /* Thread identifier type.
@@ -26,11 +25,11 @@ typedef int tid_t;
 #define TID_ERROR ((tid_t) - 1) /* Error value for tid_t. */
 
 /* Thread priorities. */
-#define PRI_MIN 0	   /* Lowest priority. */
+#define PRI_MIN 0      /* Lowest priority. */
 #define PRI_DEFAULT 31 /* Default priority. */
-#define PRI_MAX 63	   /* Highest priority. */
+#define PRI_MAX 63     /* Highest priority. */
 
-#define MAX_NESTED_DEPTH 8 // 우선순위 기부의 최대 재귀 깊이
+#define MAX_NESTED_DEPTH 8  // 우선순위 기부의 최대 재귀 깊이
 
 /* project 2 system call */
 #define MAX_FILES 128 /* 스레드당 최대 열 수 있는 파일 수 */
@@ -62,13 +61,24 @@ typedef int tid_t;
 #endif
 
 // Fixed-point arithmetic operations
-#define CONVERT_INT_TO_FP(n) ((n) * (FP_FRACTION))																					   // Convert integer to fixed-point
-#define CONVERT_FP_TO_INT_ZERO(x) ((x) / (FP_FRACTION))																				   // Convert fixed-point to integer (rounding toward zero)
-#define CONVERT_FP_TO_INT_NEAR(x) (((x) >= 0) ? ((x) + (FP_FRACTION) / 2) / (FP_FRACTION) : ((x) - (FP_FRACTION) / 2) / (FP_FRACTION)) // Convert fixed-point to integer (rounding to nearest)
-#define ADD_FP_INT(x, n) ((x) + (n) * (FP_FRACTION))																				   // Add fixed-point and integer
-#define SUB_FP_INT(x, n) ((x) - (n) * (FP_FRACTION))																				   // Subtract integer from fixed-point
-#define MUL_FP(x, y) (((int64_t)(x)) * (y) / (FP_FRACTION))																			   // Multiply two fixed-point numbers
-#define DIV_FP(x, y) (((int64_t)(x)) * (FP_FRACTION) / (y))																			   // Divide two fixed-point numbers
+#define CONVERT_INT_TO_FP(n) \
+  ((n) * (FP_FRACTION))  // Convert integer to fixed-point
+#define CONVERT_FP_TO_INT_ZERO(x) \
+  ((x) /                          \
+   (FP_FRACTION))  // Convert fixed-point to integer (rounding toward zero)
+#define CONVERT_FP_TO_INT_NEAR(x)                  \
+  (((x) >= 0)                                      \
+       ? ((x) + (FP_FRACTION) / 2) / (FP_FRACTION) \
+       : ((x) - (FP_FRACTION) / 2) /               \
+             (FP_FRACTION))  // Convert fixed-point to integer (rounding to nearest)
+#define ADD_FP_INT(x, n) \
+  ((x) + (n) * (FP_FRACTION))  // Add fixed-point and integer
+#define SUB_FP_INT(x, n) \
+  ((x) - (n) * (FP_FRACTION))  // Subtract integer from fixed-point
+#define MUL_FP(x, y) \
+  (((int64_t)(x)) * (y) / (FP_FRACTION))  // Multiply two fixed-point numbers
+#define DIV_FP(x, y) \
+  (((int64_t)(x)) * (FP_FRACTION) / (y))  // Divide two fixed-point numbers
 
 // #endif
 /* threads/fixed-point.h */
@@ -131,61 +141,69 @@ typedef int tid_t;
  * only because they are mutually exclusive: only a thread in the
  * ready state is on the run queue, whereas only a thread in the
  * blocked state is on a semaphore wait list. */
-struct thread
-{
-	/* Owned by thread.c. */
-	tid_t tid; /* Thread identifier. */					// 스레드 식별자
-	enum thread_status status; /* Thread state. */		// 스레드 상태를 나타내는 열거형 변수
-	char name[16]; /* Name (for debugging purposes). */ // 디버깅 목적으로 사용되는 스레드 이름을 저장하는 문자열 배열
-	int priority; /* Priority. */						// 스레드의 우선순위를 나타내는 정수 변수
-	int64_t local_tick;									// 스레드의 일어날 시간 변수를 저장하는 정수형 변수
+struct thread {
+  /* Owned by thread.c. */
+  tid_t tid; /* Thread identifier. */  // 스레드 식별자
+  enum thread_status status;
+  /* Thread state. */  // 스레드 상태를 나타내는 열거형 변수
+  char name[16];
+  /* Name (for debugging purposes). */  // 디버깅 목적으로 사용되는 스레드 이름을 저장하는 문자열 배열
+  int priority; /* Priority. */  // 스레드의 우선순위를 나타내는 정수 변수
+  int64_t local_tick;  // 스레드의 일어날 시간 변수를 저장하는 정수형 변수
 
-	/* Shared between thread.c and synch.c. */
-	struct list_elem elem; /* List element. */ // 스레드 리스트에 연결될 때 사용되는 리스트 요소
+  /* Shared between thread.c and synch.c. */
+  struct list_elem elem;
+  /* List element. */  // 스레드 리스트에 연결될 때 사용되는 리스트 요소
 
-	struct list_elem all_elem; /* List element for all threads list. */
+  struct list_elem all_elem; /* List element for all threads list. */
 
-	// for priority donation
-	int original_priority;			// 스레드의 원래 우선순위를 저장하는 변수
-	struct lock *wait_on_lock;		// 스레드가 대기 중인 락(장치)을 나타내는 포인터 변수
-	struct list donations;			// 우선순위 기부를 추적하기 위한 스레드 리스트
-	struct list_elem donation_elem; // 우선순위 기부 리스트에 연결될 때 사용되는 리스트 요소
+  // for priority donation
+  int original_priority;  // 스레드의 원래 우선순위를 저장하는 변수
+  struct lock
+      *wait_on_lock;  // 스레드가 대기 중인 락(장치)을 나타내는 포인터 변수
+  struct list donations;  // 우선순위 기부를 추적하기 위한 스레드 리스트
+  struct list_elem
+      donation_elem;  // 우선순위 기부 리스트에 연결될 때 사용되는 리스트 요소
 
-	/* 4BSD */
-	int nice;
-	int recent_cpu;
+  /* 4BSD */
+  int nice;
+  int recent_cpu;
 
-	/* project 2 system call */
-	struct intr_frame parent_if; /* 부모 프로세스의 인터럽트 프레임 */ // _fork() 구현 때 사용, __do_fork() 함수
-	struct list child_list; /* 자식 리스트 */						   // _fork(), wait() 구현 때 사용
-	struct list_elem child_elem; /* 자식 리스트 element */			   // _fork(), _wait() 구현 때 사용
+  /* project 2 system call */
+  struct intr_frame parent_if;
+  /* 부모 프로세스의 인터럽트 프레임 */  // _fork() 구현 때 사용, __do_fork() 함수
+  struct list child_list; /* 자식 리스트 */  // _fork(), wait() 구현 때 사용
+  struct list_elem child_elem;
+  /* 자식 리스트 element */  // _fork(), _wait() 구현 때 사용
 
-	struct semaphore load_sema; // 현재 스레드가 load되는 동안 부모가 기다리게 하기 위한 semaphore
-	struct semaphore exit_sema;
-	struct semaphore wait_sema;
+  struct semaphore
+      load_sema;  // 현재 스레드가 load되는 동안 부모가 기다리게 하기 위한 semaphore
+  struct semaphore exit_sema;
+  struct semaphore wait_sema;
 
-	// struct file *fd_table[MAX_FILES]; // 정적 할당
-	struct file **fd_table; // 파일 디스크립터 테이블을 위한 포인터
-	int next_fd;			// 다음에 사용할 파일 디스크립터 번호
+  // struct file *fd_table[MAX_FILES]; // 정적 할당
+  struct file **fd_table;  // 파일 디스크립터 테이블을 위한 포인터
+  int next_fd;             // 다음에 사용할 파일 디스크립터 번호
 
-	struct file *run_file;						// 현재 스레드의 실행중인 파일을 저장할 필드
-	int exit_status; /* 프로세스의 종료 상태 */ // _exit(), _wait() 구현 때 사용
+  struct file *run_file;  // 현재 스레드의 실행중인 파일을 저장할 필드
+  int exit_status; /* 프로세스의 종료 상태 */  // _exit(), _wait() 구현 때 사용
 
-	/* project 3 VM */
-	// struct list swap_in_pages;
+  /* project 3 VM */
+  // struct list swap_in_pages;
 
 #ifdef USERPROG
-	/* Owned by userprog/process.c. */
-	uint64_t *pml4; /* Page map level 4 */
+  /* Owned by userprog/process.c. */
+  uint64_t *pml4; /* Page map level 4 */
 #endif
 #ifdef VM
-	/* Table for whole virtual memory owned by thread. */
-	struct supplemental_page_table spt;
+  /* Table for whole virtual memory owned by thread. */
+  struct supplemental_page_table spt;
+  uint64_t *parent_pml4;
 #endif
 
-	/* Owned by thread.c. */
-	struct intr_frame tf; /* Information for switching */
-	unsigned magic;		  /* Detects stack overflow. */
+  /* Owned by thread.c. */
+  struct intr_frame tf; /* Information for switching */
+  unsigned magic;       /* Detects stack overflow. */
 };
 
 /* If false (default), use round-robin scheduler.
@@ -225,8 +243,10 @@ void do_iret(struct intr_frame *tf);
 void thread_sleep(int64_t wakeup_ticks);
 void thread_wakeup(int64_t wakeup_ticks);
 
-bool compare_ticks(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
-bool compare_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+bool compare_ticks(const struct list_elem *a, const struct list_elem *b,
+                   void *aux UNUSED);
+bool compare_priority(const struct list_elem *a, const struct list_elem *b,
+                      void *aux UNUSED);
 // bool compare_donate_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED); // 그냥 compare_priority 써도 무방
 
 void preemption_priority(void);

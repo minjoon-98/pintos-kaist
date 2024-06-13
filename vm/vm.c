@@ -12,6 +12,8 @@
 
 static const int STACK_LIMIT = (1 << 20);  // 1MB
 
+struct lock frame_lock;
+
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void vm_init(void) {
@@ -24,6 +26,7 @@ void vm_init(void) {
   /* DO NOT MODIFY UPPER LINES. */
   /* TODO: Your code goes here. */
   list_init(&frame_list);  // frame_list 초기화
+  lock_init(&frame_lock);
 }
 
 /* Get the type of the page. This function is useful if you want to know the
@@ -64,11 +67,15 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage,
     if (page == NULL) goto err;
     // printf("page type = %d", type);
     // printf("logical addr = %p\n", upage);
-    if (VM_TYPE(type) == VM_ANON)
+    if (VM_TYPE(type) == VM_ANON) {
       uninit_new(page, upage, init, type, aux, anon_initializer);
-    if (VM_TYPE(type) == VM_FILE)
+    }
+    if (VM_TYPE(type) == VM_FILE) {
       uninit_new(page, upage, init, type, aux, file_backed_initializer);
+    }
     page->writable = writable;
+    page->original_writable = writable;
+
     page->is_loaded = false;
     /* TODO: Insert the page into the spt. */
     if (spt_insert_page(spt, page) == false) {
@@ -77,9 +84,11 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage,
       goto err;
     }
     // printf("allocated vm address is : %p\n", spt_find_page(spt, upage)->va);
+    printf("@@ initializer done type : %d\n", type);
     return true;
   }
 err:
+  printf("@@ initializer ERROR !! type : %d\n", type);
   return false;
 }
 
@@ -133,7 +142,12 @@ static struct frame *vm_evict_frame(void) {
   if (victim == NULL) return NULL;
 
   /* TODO: swap out the victim and return the evicted frame. */
-  swap_out(victim->page);
+  if (swap_out(victim->page)) {
+    victim->page = NULL;
+    memset(victim->kva, 0, PGSIZE);
+    victim->ref_count = 1;
+    return victim;
+  }
   // victim->page = NULL;
 
   // printf("victim : %p, victim kva : %d, victim page : %p\n", victim, victim->kva, victim->page);
@@ -163,6 +177,8 @@ static struct frame *vm_get_frame(void) {
 
   frame = calloc(sizeof(struct frame), 1);  // 프레임 할당
   frame->kva = kva;
+  frame->ref_count = 1;
+
   // list_push_back(&frame_list, &frame->frame_elem); // 프레임을 리스트에 추가 // do_claim으로 옮김
 
   ASSERT(frame != NULL);
@@ -187,7 +203,27 @@ static void vm_stack_growth(void *addr UNUSED) {
 }
 
 /* Handle the fault on write_protected page */
-static bool vm_handle_wp(struct page *page UNUSED) {}
+static bool vm_handle_wp(struct page *page UNUSED) {
+  if (!page->original_writable) return false;
+
+  if (page->frame->ref_count > 1) {
+    // 물리 frame 새로 할당
+    struct frame *new_frame = vm_get_frame();
+    if (!new_frame) return false;
+    memcpy(new_frame->kva, page->frame->kva, PGSIZE);
+    lock_acquire(&frame_lock);
+    page->frame->ref_count--;
+
+    page->frame = new_frame;
+    page->frame->ref_count = 1;
+    lock_release(&frame_lock);
+    pml4_clear_page(thread_current()->pml4, page->va);
+  }
+  page->writable = true;
+  pml4_set_page(thread_current()->pml4, page->va, page->frame->kva, true);
+
+  return true;
+}
 
 /**
  * @brief page fault시에 handling을 시도한다.
@@ -219,8 +255,6 @@ bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED,
 
   if (!page)  // 페이지가 없을 때
   {
-    if (!not_present)  // 물리 메모리에 이미 적재가 되어있는 경우
-      return false;
 
     // 스택 확장이 필요한지 검사
     if (addr < (void *)USER_STACK &&  // 접근 주소가 사용자 스택 내에 있고
@@ -233,8 +267,8 @@ bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED,
     }
     return false;  // 스택 확장 조건에 맞지 않음
   } else {
-    if (page->writable == false && write == true) {
-      return false;
+    if (write && !not_present) {
+      return vm_handle_wp(page);
     }
 
     bool lock = false;
@@ -242,7 +276,7 @@ bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED,
       lock_acquire(&filesys_lock);  // ADD: filesys_lock at file system
       lock = true;
     }
-    bool succ = vm_claim_page(page_addr);  // 페이지 클레임
+    bool succ = vm_do_claim_page(page);  // 페이지 클레임
     if (lock) {
       lock_release(&filesys_lock);  // ADD: filesys_lock at file system
       lock = false;
@@ -301,68 +335,102 @@ void supplemental_page_table_init(struct supplemental_page_table *spt UNUSED) {
 /* Copy supplemental page table from src to dst */
 bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
                                   struct supplemental_page_table *src UNUSED) {
-  struct page *parent_page, *child_page = NULL;
-  struct page_info_transmitter *src_aux, *dst_aux = NULL;
-  uint8_t parent_type;
+  struct hash_iterator i;
+  hash_first(&i, &src->spt_hash);
+  printf("@@ spt_copy 1\n");
 
-  struct hash_iterator iterator;
-  hash_first(&iterator, &src->spt_hash);
+  printf("hash table size : %d \n", hash_size(&src->spt_hash));
 
-  while (hash_next(&iterator)) {
-    parent_page = hash_entry(hash_cur(&iterator), struct page, hash_elem);
-    parent_type = parent_page->operations->type;
+  while (hash_next(&i)) {
 
-    // 초기화되지 않은 페이지인 경우
-    switch (VM_TYPE(parent_type)) {
-      case VM_UNINIT:
-        src_aux = (struct page_info_transmitter *)parent_page->uninit.aux;
-        dst_aux = malloc(sizeof(struct page_info_transmitter));
-        if (!dst_aux) PANIC("malloc FAIL !!");
+    printf("--------------- loop start---------------\n");
 
-        dst_aux->file = file_reopen(src_aux->file);
-        dst_aux->size = src_aux->size;
-        dst_aux->start_addr = src_aux->start_addr;
-        dst_aux->read_bytes = src_aux->read_bytes;
-        dst_aux->zero_bytes = src_aux->zero_bytes;
-        dst_aux->ofs = src_aux->ofs;
+    struct page *src_page = hash_entry(hash_cur(&i), struct page, hash_elem);
 
-        if (!vm_alloc_page_with_initializer(
-                parent_page->uninit.type, parent_page->va,
-                parent_page->writable, parent_page->uninit.init, dst_aux)) {
-          free(dst_aux);
-          return false;
-        }
-        break;
+    printf("src page->va : %p\n", src_page->va);
 
-      case VM_ANON:
-        if (!vm_alloc_page(parent_type, parent_page->va, parent_page->writable))
-          return false;
-        if (!vm_claim_page(parent_page->va)) return false;
-
-        child_page = spt_find_page(dst, parent_page->va);
-        if (!child_page) return false;
-
-        memcpy(child_page->frame->kva, parent_page->frame->kva, PGSIZE);
-        break;
-
-      case VM_FILE:
-        if (!vm_alloc_page(VM_ANON, parent_page->va, parent_page->writable))
-          return false;
-        child_page = spt_find_page(dst, parent_page->va);
-        if (!child_page) return false;
-
-        if (!vm_claim_page(parent_page->va)) return false;
-        child_page->type = VM_FILE;
-        memcpy(&child_page->file, &parent_page->file, sizeof(struct file_page));
-        memcpy(child_page->frame->kva, parent_page->frame->kva, PGSIZE);
-        child_page->file.file = file_reopen(parent_page->file.file);
-        break;
-
-      default:
-        PANIC("{supplemental_page_table_copy()} unknown type !!");
-        break;
+    if (!src_page) {
+      printf("@@ src_page is NULL\n");
+      return false;
     }
+    struct page *dst_page;
+    enum vm_type src_type = VM_TYPE(src_page->operations->type);
+    printf("src type  : %d\n", src_type);
+    if (src_type == VM_UNINIT) {
+      if (!vm_alloc_page_with_initializer(
+              src_page->uninit.type, src_page->va, src_page->writable,
+              src_page->uninit.init, src_page->uninit.aux)) {
+        printf("@@ VM_UNITI die\n");
+        return false;
+      }
+      printf("@@ VM_UNITI done !\n");
+
+      continue;
+    }
+
+    if (src_type == VM_FILE) {
+      printf("@@ is FILE TYPE \n");
+      struct page_info_transmitter *info =
+          malloc(sizeof(struct page_info_transmitter));
+      if (!info) {
+        printf("@@ malloc fail aux\n");
+        return false;
+      };
+      *info = *(struct page_info_transmitter *)src_page->uninit.aux;
+      if (!vm_alloc_page_with_initializer(VM_FILE, src_page->va,
+                                          src_page->writable,
+                                          src_page->uninit.init, info)) {
+        printf("@@ not alloc page with init\n");
+
+        free(info);
+        return false;
+      }
+      printf("@@ VM_FILE done !\n");
+
+    } else {
+      if (!vm_alloc_page(src_type, src_page->va, src_page->writable)) {
+        printf("@@ not alloc page\n");
+        return false;
+      }
+      printf("@@ VM_ANON done !\n");
+    }
+
+    dst_page = spt_find_page(dst, src_page->va);
+    if (dst_page == NULL) {
+      printf("@@ not found dst_page\n");
+      return false;
+    }
+
+    dst_page->operations = src_page->operations;
+    dst_page->frame = src_page->frame;
+    dst_page->writable = false;
+    dst_page->original_writable = src_page->writable;
+    src_page->writable = false;
+
+    printf("@@ lock 획득 \n");
+    lock_acquire(&frame_lock);
+    src_page->frame->ref_count++;
+    lock_release(&frame_lock);
+    printf("@@ lock 놓기 \n");
+
+    if (!pml4_set_page(thread_current()->pml4, dst_page->va,
+                       dst_page->frame->kva, false)) {
+      printf("@@ !pml4_set_page\n");
+
+      return false;
+    }
+
+    if (!pml4_set_page(thread_current()->parent_pml4, src_page->va,
+                       src_page->frame->kva, false)) {
+      printf("@@ !!pml4_set_page src_page\n");
+
+      return false;
+    }
+
+    printf("@@ loop done \n");
   }
+
+  printf("@@ spt_copy 3\n");
 
   return true;
 }
@@ -391,4 +459,20 @@ bool page_table_entry_less_function(struct hash_elem *a, struct hash_elem *b,
 void spt_destory(struct hash_elem *hash_elem, void *aux UNUSED) {
   struct page *page = hash_entry(hash_elem, struct page, hash_elem);
   vm_dealloc_page(page);
+}
+
+void free_frame(struct frame *frame) {
+  lock_acquire(&frame_lock);
+
+  if (frame->ref_count > 1) {
+    frame->ref_count--;
+    lock_release(&frame_lock);
+    return;
+  }
+
+  list_remove(&frame->frame_elem);
+  palloc_free_page(frame->kva);
+  free(frame);
+
+  lock_release(&frame_lock);
 }
