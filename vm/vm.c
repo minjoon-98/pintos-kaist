@@ -56,10 +56,11 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage,
 
   ASSERT(VM_TYPE(type) != VM_UNINIT)
 
+  // printf("@@ initializer start\n");
   struct supplemental_page_table *spt = &thread_current()->spt;
-
   /* Check wheter the upage is already occupied or not. */
   if (spt_find_page(spt, upage) == NULL) {
+    // printf("@@ initializer spt_find_page(spt, upage) == NULL)\n");
     /* TODO: Create the page, fetch the initialier according to the VM type,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
@@ -68,14 +69,16 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage,
     // printf("page type = %d", type);
     // printf("logical addr = %p\n", upage);
     if (VM_TYPE(type) == VM_ANON) {
+      // printf("@@ uninit_new() start\n");
       uninit_new(page, upage, init, type, aux, anon_initializer);
     }
     if (VM_TYPE(type) == VM_FILE) {
+      // printf("@@ uninit_new() start\n");
       uninit_new(page, upage, init, type, aux, file_backed_initializer);
     }
     page->writable = writable;
     page->original_writable = writable;
-
+    // printf("@@ uninit_new() DONE\n");
     page->is_loaded = false;
     /* TODO: Insert the page into the spt. */
     if (spt_insert_page(spt, page) == false) {
@@ -84,11 +87,13 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage,
       goto err;
     }
     // printf("allocated vm address is : %p\n", spt_find_page(spt, upage)->va);
-    printf("@@ initializer done type : %d\n", type);
+    // printf("@@ initializer done type : %d\n", type);
     return true;
   }
+  // printf("@@ initializer spt_find_page(spt, upage) != NULL)\n");
+
 err:
-  printf("@@ initializer ERROR !! type : %d\n", type);
+  // printf("@@ initializer ERROR !! type : %d\n", type);
   return false;
 }
 
@@ -337,67 +342,70 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
                                   struct supplemental_page_table *src UNUSED) {
   struct hash_iterator i;
   hash_first(&i, &src->spt_hash);
-  printf("@@ spt_copy 1\n");
+  // printf("@@ spt_copy 1\n");
 
-  printf("hash table size : %d \n", hash_size(&src->spt_hash));
+  // printf("hash table size : %d \n", hash_size(&src->spt_hash));
 
   while (hash_next(&i)) {
 
-    printf("--------------- loop start---------------\n");
+    // printf("@@ --------------- loop start---------------\n");
 
     struct page *src_page = hash_entry(hash_cur(&i), struct page, hash_elem);
 
-    printf("src page->va : %p\n", src_page->va);
+    // printf("src page->va : %p\n", src_page->va);
 
     if (!src_page) {
-      printf("@@ src_page is NULL\n");
+      // printf("@@ src_page is NULL\n");
       return false;
     }
     struct page *dst_page;
     enum vm_type src_type = VM_TYPE(src_page->operations->type);
-    printf("src type  : %d\n", src_type);
+    // printf("@@ src type  : %d\n", src_type);
     if (src_type == VM_UNINIT) {
       if (!vm_alloc_page_with_initializer(
               src_page->uninit.type, src_page->va, src_page->writable,
               src_page->uninit.init, src_page->uninit.aux)) {
-        printf("@@ VM_UNITI die\n");
+        // printf("@@ VM_UNITI die\n");
         return false;
       }
-      printf("@@ VM_UNITI done !\n");
+      // printf("@@ VM_UNITI done !\n");
 
       continue;
     }
 
     if (src_type == VM_FILE) {
-      printf("@@ is FILE TYPE \n");
+      // printf("@@ is FILE TYPE \n");
       struct page_info_transmitter *info =
           malloc(sizeof(struct page_info_transmitter));
       if (!info) {
-        printf("@@ malloc fail aux\n");
+        // printf("@@ malloc fail aux\n");
         return false;
       };
-      *info = *(struct page_info_transmitter *)src_page->uninit.aux;
+      // printf("@@ info 역참조 시작 \n");
+      info = (struct page_info_transmitter *)src_page->uninit.aux;
+      // printf("@@ info 역참조 DONE \n");
+
       if (!vm_alloc_page_with_initializer(VM_FILE, src_page->va,
                                           src_page->writable,
                                           src_page->uninit.init, info)) {
-        printf("@@ not alloc page with init\n");
+        // printf("@@ not alloc page with init\n");
 
         free(info);
         return false;
       }
-      printf("@@ VM_FILE done !\n");
+      // printf("@@ VM_FILE done !\n");
 
     } else {
       if (!vm_alloc_page(src_type, src_page->va, src_page->writable)) {
-        printf("@@ not alloc page\n");
+        // printf("@@ not alloc page\n");
         return false;
       }
-      printf("@@ VM_ANON done !\n");
+      // printf("@@ VM_ANON done !\n");
     }
 
     dst_page = spt_find_page(dst, src_page->va);
     if (dst_page == NULL) {
-      printf("@@ not found dst_page\n");
+      // printf("@@ not found dst_page\n");
       return false;
     }
 
@@ -407,30 +415,30 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
     dst_page->original_writable = src_page->writable;
     src_page->writable = false;
 
-    printf("@@ lock 획득 \n");
+    // printf("@@ lock 획득 \n");
     lock_acquire(&frame_lock);
     src_page->frame->ref_count++;
     lock_release(&frame_lock);
-    printf("@@ lock 놓기 \n");
+    // printf("@@ lock 놓기 \n");
 
     if (!pml4_set_page(thread_current()->pml4, dst_page->va,
                        dst_page->frame->kva, false)) {
-      printf("@@ !pml4_set_page\n");
+      // printf("@@ !pml4_set_page\n");
 
       return false;
     }
 
     if (!pml4_set_page(thread_current()->parent_pml4, src_page->va,
                        src_page->frame->kva, false)) {
-      printf("@@ !!pml4_set_page src_page\n");
+      // printf("@@ !!pml4_set_page src_page\n");
 
       return false;
     }
 
-    printf("@@ loop done \n");
+    // printf("@@ loop done \n");
   }
 
-  printf("@@ spt_copy 3\n");
+  // printf("@@ spt_copy 3\n");
 
   return true;
 }
