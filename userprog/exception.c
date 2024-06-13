@@ -147,20 +147,20 @@ page_fault(struct intr_frame *f)
 	/* For project 3 and later. */
 	if (vm_try_handle_fault(f, fault_addr, user, write, not_present))
 		return;
+	exit(-1);
+	kill(f);
 #endif
 
 	/* Count page faults. */
 	page_fault_cnt++;
 
 	/* If the fault is true fault, show info and exit. */
-	if (!user)
-	{
-		printf("Page fault at %p: %s error %s page in %s context.\n",
-			   fault_addr,
-			   not_present ? "not present" : "rights violation",
-			   write ? "writing" : "reading",
-			   user ? "user" : "kernel");
-	}
+	printf("Page fault at %p: %s error %s page in %s context.\n",
+		   fault_addr,
+		   not_present ? "not present" : "rights violation",
+		   write ? "writing" : "reading",
+		   user ? "user" : "kernel");
+
 	exit(-1);
 	kill(f);
 }
